@@ -83,7 +83,10 @@ archives:
       - goos: windows
         format: zip
     files:
+      - README.md
       - LICENSE
+      - assets/*
+      - settings.toml
 checksum:
   name_template: 'checksums.txt'
 changelog:
