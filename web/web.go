@@ -53,6 +53,8 @@ func ListenAndServe(conf *config.Config) error {
 	r.Get("/getIP", getIP)
 	r.Get("/backend/getIP", getIP)
 	r.Get("/results", results.DrawPNG)
+	r.Get("/results/", results.DrawPNG)
+	r.Get("/backend/results", results.DrawPNG)
 	r.Get("/backend/results/", results.DrawPNG)
 	r.Post("/results/telemetry", results.Record)
 	r.Post("/backend/results/telemetry", results.Record)
