@@ -17,11 +17,7 @@ import (
 )
 
 var (
-	// get server location from ipinfo.io from start to minimize API access
-	serverLat, serverLng = getServerLocation()
-	// for testing
-	// serverLat, serverLng = 22.7702, 112.9578
-	// serverLat, serverLng = 23.018, 113.7487
+	serverLat, serverLng float64
 )
 
 func getRandomData(length int) []byte {
@@ -71,9 +67,7 @@ func getIPInfo(addr string) results.IPInfoResponse {
 	return ret
 }
 
-func getServerLocation() (float64, float64) {
-	conf := config.LoadedConfig()
-
+func SetServerLocation(conf *config.Config) (float64, float64) {
 	if conf.ServerLat > 0 && conf.ServerLng > 0 {
 		log.Infof("Configured server coordinates: %.6f, %.6f", conf.ServerLat, conf.ServerLng)
 		return conf.ServerLat, conf.ServerLng

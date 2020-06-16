@@ -1,6 +1,8 @@
 package config
 
 import (
+	"os"
+
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 )
@@ -53,8 +55,32 @@ func Load() Config {
 		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
 			log.Warnf("No config file found in search paths, using default values")
 		} else {
-			log.Fatalf("Error reading config: %+v", err)
+			log.Fatalf("Error reading config: %s", err)
 		}
+	}
+
+	if err := viper.Unmarshal(&conf); err != nil {
+		log.Fatalf("Error parsing config: %s", err)
+	}
+
+	loadedConfig = &conf
+
+	return conf
+}
+
+func LoadFile(configFile string) Config {
+	var conf Config
+
+	f, err := os.OpenFile(configFile, os.O_RDONLY, 0444)
+
+	if err != nil {
+		log.Fatalf("Failed to open config file: %s", err)
+	}
+
+	defer f.Close()
+
+	if err := viper.ReadConfig(f); err != nil {
+		log.Fatalf("Error reading config: %s", err)
 	}
 
 	if err := viper.Unmarshal(&conf); err != nil {
