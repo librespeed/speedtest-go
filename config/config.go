@@ -15,6 +15,8 @@ type Config struct {
 	StatsPassword string `mapstructure:"statistics_password"`
 	RedactIP      bool   `mapstructure:"redact_ip_addresses"`
 
+	AssetsPath string `mapstructure:"assets_path"`
+
 	DatabaseType     string `mapstructure:"database_type"`
 	DatabaseHostname string `mapstructure:"database_hostname"`
 	DatabaseName     string `mapstructure:"database_name"`
@@ -35,6 +37,7 @@ func init() {
 	viper.SetDefault("enable_cors", false)
 	viper.SetDefault("statistics_password", "PASSWORD")
 	viper.SetDefault("redact_ip_addresses", false)
+	viper.SetDefault("assets_path", "./assets")
 	viper.SetDefault("database_type", "postgresql")
 	viper.SetDefault("database_hostname", "localhost")
 	viper.SetDefault("database_name", "speedtest")

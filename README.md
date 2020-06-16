@@ -95,6 +95,9 @@ manually, you can install newer version of Go into your GOPATH:
     server_lng=0
     # ipinfo.io API key, if applicable
     ipinfo_api_key=""
+   
+    # assets directory path, defaults to `assets` in the same directory
+    assets_path="./assets"
 
     # password for logging into statistics page, change this to enable stats page
     statistics_password="PASSWORD"

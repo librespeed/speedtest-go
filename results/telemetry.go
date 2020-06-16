@@ -10,6 +10,7 @@ import (
 	"math/rand"
 	"net"
 	"net/http"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
@@ -75,10 +76,10 @@ type IPInfoResponse struct {
 	Readme       string `json:"readme"`
 }
 
-func init() {
+func Initialize(c *config.Config) {
 	// changed to use Noto Sans instead of OpenSans, due to issue:
 	// https://github.com/golang/freetype/issues/8
-	if b, err := ioutil.ReadFile("assets/NotoSansDisplay-Light.ttf"); err != nil {
+	if b, err := ioutil.ReadFile(filepath.Join(c.AssetsPath, "NotoSansDisplay-Light.ttf")); err != nil {
 		log.Fatalf("Error opening NotoSansDisplay-Light font: %s", err)
 	} else {
 		f, err := freetype.ParseFont(b)
@@ -88,7 +89,7 @@ func init() {
 		fontLight = f
 	}
 
-	if b, err := ioutil.ReadFile("assets/NotoSansDisplay-Medium.ttf"); err != nil {
+	if b, err := ioutil.ReadFile(filepath.Join(c.AssetsPath, "NotoSansDisplay-Medium.ttf")); err != nil {
 		log.Fatalf("Error opening NotoSansDisplay-Medium font: %s", err)
 	} else {
 		f, err := freetype.ParseFont(b)

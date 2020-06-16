@@ -81,9 +81,11 @@ func pages(w http.ResponseWriter, r *http.Request) {
 		r.RequestURI = "/index.html"
 	}
 
+	conf := config.LoadedConfig()
+
 	uri := strings.Split(r.RequestURI, "?")[0]
 	if strings.HasSuffix(uri, ".html") || strings.HasSuffix(uri, ".js") {
-		http.FileServer(http.Dir("assets")).ServeHTTP(w, r)
+		http.FileServer(http.Dir(conf.AssetsPath)).ServeHTTP(w, r)
 	} else {
 		w.WriteHeader(http.StatusForbidden)
 	}
