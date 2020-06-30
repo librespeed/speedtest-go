@@ -17,4 +17,4 @@ COPY --from=build_base /go/src/github.com/librespeed/speedtest-go/settings.toml 
 
 EXPOSE 8989
 
-CMD ["speedtest"]
+CMD ["./speedtest"]
