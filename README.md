@@ -49,14 +49,12 @@ manually, you can install newer version of Go into your GOPATH:
 
     ```
     $ git clone github.com/librespeed/speedtest-go
-    # Switch to the Go branch
-    $ git checkout go
     ```
 
 2. Build
     ```
     # Change current working directory to the repository
-    $ cd speedtest
+    $ cd speedtest-go
     # Compile
     $ go build -ldflags "-w -s" -trimpath -o speedtest main.go
     ```
