@@ -91,13 +91,8 @@ func pages(w http.ResponseWriter, r *http.Request) {
 	}
 
 	conf := config.LoadedConfig()
-
-	uri := strings.Split(r.RequestURI, "?")[0]
-	if strings.HasSuffix(uri, ".html") || strings.HasSuffix(uri, ".js") {
-		http.FileServer(http.Dir(conf.AssetsPath)).ServeHTTP(w, r)
-	} else {
-		w.WriteHeader(http.StatusForbidden)
-	}
+	fs := justFilesFilesystem{fs: http.Dir(conf.AssetsPath), readDirBatchSize: 2}
+	http.FileServer(fs).ServeHTTP(w, r)
 }
 
 func empty(w http.ResponseWriter, r *http.Request) {
