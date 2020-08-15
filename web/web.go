@@ -87,7 +87,7 @@ func pages(w http.ResponseWriter, r *http.Request) {
 	if strings.HasSuffix(uri, ".html") || strings.HasSuffix(uri, ".js") {
 		http.FileServer(http.Dir(conf.AssetsPath)).ServeHTTP(w, r)
 	} else {
-		w.WriteHeader(http.StatusForbidden)
+		w.WriteHeader(http.StatusNotFound)
 	}
 }
 
