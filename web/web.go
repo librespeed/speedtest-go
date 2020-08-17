@@ -31,8 +31,9 @@ var (
 )
 
 func ListenAndServe(conf *config.Config) error {
-	r := chi.NewMux()
+	r := chi.NewRouter()
 	r.Use(middleware.RealIP)
+	r.Use(middleware.GetHead)
 
 	cs := cors.New(cors.Options{
 		AllowedOrigins: []string{"*"},
@@ -43,20 +44,16 @@ func ListenAndServe(conf *config.Config) error {
 	r.Use(cs.Handler)
 	r.Use(middleware.NoCache)
 	r.Use(middleware.Logger)
+	r.Use(middleware.Recoverer)
 
 	log.Infof("Starting backend server on %s", net.JoinHostPort(conf.BindAddress, conf.Port))
 	r.Get("/*", pages)
-	r.Head("/*", pages)
 	r.HandleFunc("/empty", empty)
 	r.HandleFunc("/backend/empty", empty)
 	r.Get("/garbage", garbage)
-	r.Head("/garbage", garbage)
 	r.Get("/backend/garbage", garbage)
-	r.Head("/backend/garbage", garbage)
 	r.Get("/getIP", getIP)
-	r.Head("/getIP", getIP)
 	r.Get("/backend/getIP", getIP)
-	r.Head("/backend/getIP", getIP)
 	r.Get("/results", results.DrawPNG)
 	r.Get("/results/", results.DrawPNG)
 	r.Get("/backend/results", results.DrawPNG)
@@ -70,13 +67,9 @@ func ListenAndServe(conf *config.Config) error {
 	r.HandleFunc("/empty.php", empty)
 	r.HandleFunc("/backend/empty.php", empty)
 	r.Get("/garbage.php", garbage)
-	r.Head("/garbage.php", garbage)
 	r.Get("/backend/garbage.php", garbage)
-	r.Head("/backend/garbage.php", garbage)
 	r.Get("/getIP.php", getIP)
-	r.Head("/getIP.php", getIP)
 	r.Get("/backend/getIP.php", getIP)
-	r.Head("/backend/getIP.php", getIP)
 	r.Post("/results/telemetry.php", results.Record)
 	r.Post("/backend/results/telemetry.php", results.Record)
 	r.HandleFunc("/stats.php", results.Stats)
