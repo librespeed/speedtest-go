@@ -7,7 +7,7 @@ No Flash, No Java, No WebSocket, No Bullshit.
 This is a very lightweight speed test implemented in JavaScript, using XMLHttpRequest and Web Workers.
 
 ## Try it
-[Take a speed test](https://speedtest.fdossena.com) (PHP implementation)
+[Take a speed test](https://speedtest.zzz.cat)
 
 ## Compatibility
 All modern browsers are supported: IE11, latest Edge, latest Chrome, latest Firefox, latest Safari.
@@ -24,7 +24,7 @@ Works with mobile versions too.
 * Multiple Points of Test (optional)
 * Compatible with PHP frontend predefined endpoints (with `.php` suffixes)
 
-![Screenshot](https://speedtest.fdossena.com/mpot_v6.gif)
+![Screencast](https://speedtest.zzz.cat/speedtest.gif)
 
 ## Server requirements
 * Any [Go supported platforms](https://github.com/golang/go/wiki/MinimumRequirements)
@@ -34,7 +34,7 @@ Works with mobile versions too.
 ## Installation
 
 You need Go 1.13+ to compile the binary. If you have an older version of Go and don't want to install the tarball
-manually, you can install newer version of Go into your GOPATH:
+manually, you can install newer version of Go into your `GOPATH`:
 
 0. Install Go 1.14
 
