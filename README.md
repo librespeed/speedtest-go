@@ -24,7 +24,7 @@ Works with mobile versions too.
 * Multiple Points of Test (optional)
 * Compatible with PHP frontend predefined endpoints (with `.php` suffixes)
 
-![Screencast](https://speedtest.zzz.cat/speedtest.gif)
+![Screencast](https://speedtest.zzz.cat/speedtest.webp)
 
 ## Server requirements
 * Any [Go supported platforms](https://github.com/golang/go/wiki/MinimumRequirements)
