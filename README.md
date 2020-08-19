@@ -23,6 +23,7 @@ Works with mobile versions too.
 * Results sharing (optional)
 * Multiple Points of Test (optional)
 * Compatible with PHP frontend predefined endpoints (with `.php` suffixes)
+* Supports [Proxy Protocol](https://www.haproxy.org/download/1.8/doc/proxy-protocol.txt)
 
 ![Screencast](https://speedtest.zzz.cat/speedtest.webp)
 
@@ -88,6 +89,8 @@ manually, you can install newer version of Go into your `GOPATH`:
     bind_address="127.0.0.1"
     # backend listen port, default is 8989
     listen_port=8989
+    # proxy protocol port, use 0 to disable
+    proxyprotocol_port=0
     # Server location, use zeroes to fetch from API automatically
     server_lat=0
     server_lng=0

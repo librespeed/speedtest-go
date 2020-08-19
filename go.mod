@@ -8,9 +8,9 @@ require (
 	github.com/go-chi/render v1.0.1
 	github.com/go-sql-driver/mysql v1.5.0
 	github.com/golang/freetype v0.0.0-20170609003504-e2365dfdc4a0
-	github.com/gorilla/websocket v1.4.2
 	github.com/lib/pq v1.3.0
 	github.com/oklog/ulid/v2 v2.0.2
+	github.com/pires/go-proxyproto v0.1.3
 	github.com/sirupsen/logrus v1.4.2
 	github.com/spf13/viper v1.6.2
 	go.etcd.io/bbolt v1.3.3

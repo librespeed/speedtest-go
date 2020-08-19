@@ -14,6 +14,7 @@ import (
 	"github.com/go-chi/chi/middleware"
 	"github.com/go-chi/cors"
 	"github.com/go-chi/render"
+	"github.com/pires/go-proxyproto"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/librespeed/speedtest/config"
@@ -46,7 +47,8 @@ func ListenAndServe(conf *config.Config) error {
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 
-	log.Infof("Starting backend server on %s", net.JoinHostPort(conf.BindAddress, conf.Port))
+	addr := net.JoinHostPort(conf.BindAddress, conf.Port)
+	log.Infof("Starting backend server on %s", addr)
 	r.Get("/*", pages)
 	r.HandleFunc("/empty", empty)
 	r.HandleFunc("/backend/empty", empty)
@@ -75,7 +77,24 @@ func ListenAndServe(conf *config.Config) error {
 	r.HandleFunc("/stats.php", results.Stats)
 	r.HandleFunc("/backend/stats.php", results.Stats)
 
-	return http.ListenAndServe(net.JoinHostPort(conf.BindAddress, conf.Port), r)
+	go listenProxyProtocol(conf, r)
+	return http.ListenAndServe(addr, r)
+}
+
+func listenProxyProtocol(conf *config.Config, r *chi.Mux) {
+	if conf.ProxyProtocolPort != "0" {
+		addr := net.JoinHostPort(conf.BindAddress, conf.ProxyProtocolPort)
+		l, err := net.Listen("tcp", addr)
+		if err != nil {
+			log.Fatal("Cannot listen on proxy protocol port %s: %s", conf.ProxyProtocolPort, err)
+		}
+
+		pl := &proxyproto.Listener{Listener: l}
+		defer pl.Close()
+
+		log.Infof("Starting proxy protocol listener on %s", addr)
+		log.Fatal(http.Serve(pl, r))
+	}
 }
 
 func pages(w http.ResponseWriter, r *http.Request) {

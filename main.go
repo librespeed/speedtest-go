@@ -7,7 +7,6 @@ import (
 	"github.com/librespeed/speedtest/database"
 	"github.com/librespeed/speedtest/results"
 	"github.com/librespeed/speedtest/web"
-
 	log "github.com/sirupsen/logrus"
 )
 
