@@ -23,7 +23,7 @@ Works with mobile versions too.
 * Results sharing (optional)
 * Multiple Points of Test (optional)
 * Compatible with PHP frontend predefined endpoints (with `.php` suffixes)
-* Supports [Proxy Protocol](https://www.haproxy.org/download/1.8/doc/proxy-protocol.txt)
+* Supports [Proxy Protocol](https://www.haproxy.org/download/2.3/doc/proxy-protocol.txt) (without TLV support yet)
 
 ![Screencast](https://speedtest.zzz.cat/speedtest.webp)
 
