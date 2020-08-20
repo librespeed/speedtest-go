@@ -20,6 +20,7 @@ require (
 	github.com/spf13/jwalterweatherman v1.1.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/spf13/viper v1.7.1
+	github.com/umahmood/haversine v0.0.0-20151105152445-808ab04add26
 	go.etcd.io/bbolt v1.3.5
 	golang.org/x/image v0.0.0-20200801110659-972c09e46d76
 	golang.org/x/sys v0.0.0-20200819035508-9a32b3aa38f5 // indirect

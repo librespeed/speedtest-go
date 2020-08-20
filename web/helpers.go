@@ -5,10 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"math"
 	"net/http"
 	"strconv"
 	"strings"
+
+	"github.com/umahmood/haversine"
 
 	"github.com/librespeed/speedtest/config"
 	"github.com/librespeed/speedtest/results"
@@ -17,7 +18,7 @@ import (
 )
 
 var (
-	serverLat, serverLng float64
+	serverCoord haversine.Coord
 )
 
 func getRandomData(length int) []byte {
@@ -67,95 +68,89 @@ func getIPInfo(addr string) results.IPInfoResponse {
 	return ret
 }
 
-func SetServerLocation(conf *config.Config) (float64, float64) {
+func SetServerLocation(conf *config.Config) {
 	if conf.ServerLat > 0 && conf.ServerLng > 0 {
 		log.Infof("Configured server coordinates: %.6f, %.6f", conf.ServerLat, conf.ServerLng)
-		return conf.ServerLat, conf.ServerLng
+		serverCoord.Lat = conf.ServerLat
+		serverCoord.Lon = conf.ServerLng
+		return
 	}
 
 	var ret results.IPInfoResponse
 	resp, err := http.DefaultClient.Get(getIPInfoURL(""))
 	if err != nil {
 		log.Errorf("Error getting repsonse from ipinfo.io: %s", err)
-		return 0, 0
+		return
 	}
 	raw, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		log.Errorf("Error reading response from ipinfo.io: %s", err)
-		return 0, 0
+		return
 	}
 	defer resp.Body.Close()
 
 	if err := json.Unmarshal(raw, &ret); err != nil {
 		log.Errorf("Error parsing response from ipinfo.io: %s", err)
-		return 0, 0
+		return
 	}
 
-	var lat, lng float64
 	if ret.Location != "" {
-		lat, lng = parseLocationString(ret.Location)
+		serverCoord, err = parseLocationString(ret.Location)
+		if err != nil {
+			log.Errorf("Cannot get server coordinates: %s", err)
+			return
+		}
 	}
 
-	log.Infof("Fetched server coordinates: %.6f, %.6f", lat, lng)
-
-	return lat, lng
+	log.Infof("Fetched server coordinates: %.6f, %.6f", serverCoord.Lat, serverCoord.Lon)
 }
 
-func parseLocationString(location string) (float64, float64) {
+func parseLocationString(location string) (haversine.Coord, error) {
+	var coord haversine.Coord
+
 	parts := strings.Split(location, ",")
 	if len(parts) != 2 {
-		log.Errorf("Unknown location format: %s", location)
-		return 0, 0
+		err := fmt.Errorf("unknown location format: %s", location)
+		log.Error(err)
+		return coord, err
 	}
 
 	lat, err := strconv.ParseFloat(parts[0], 64)
 	if err != nil {
 		log.Errorf("Error parsing latitude: %s", parts[0])
-		return 0, 0
+		return coord, err
 	}
 
 	lng, err := strconv.ParseFloat(parts[1], 64)
 	if err != nil {
 		log.Errorf("Error parsing longitude: %s", parts[0])
-		return 0, 0
+		return coord, err
 	}
 
-	return lat, lng
+	coord.Lat = lat
+	coord.Lon = lng
+
+	return coord, nil
 }
 
 func calculateDistance(clientLocation string, unit string) string {
-	clientLat, clientLng := parseLocationString(clientLocation)
-
-	radlat1 := float64(math.Pi * serverLat / 180)
-	radlat2 := float64(math.Pi * clientLat / 180)
-
-	theta := float64(serverLng - clientLng)
-	radtheta := float64(math.Pi * theta / 180)
-
-	dist := math.Sin(radlat1)*math.Sin(radlat2) + math.Cos(radlat1)*math.Cos(radlat2)*math.Cos(radtheta)
-
-	if dist > 1 {
-		dist = 1
+	clientCoord, err := parseLocationString(clientLocation)
+	if err != nil {
+		log.Errorf("Error parsing client coordinates: %s", err)
+		return ""
 	}
 
-	dist = math.Acos(dist)
-	dist = dist * 180 / math.Pi
-	dist = dist * 60 * 1.1515
-
+	dist, km := haversine.Distance(clientCoord, serverCoord)
 	unitString := " mi"
+
 	switch unit {
 	case "km":
-		dist = dist * 1.609344
+		dist = km
 		unitString = " km"
 	case "NM":
-		dist = dist * 0.8684
+		dist = km * 0.539957
 		unitString = " NM"
 	}
 
-	return fmt.Sprintf("%d%s", round(dist), unitString)
-}
-
-func round(v float64) int {
-	r := int(math.Round(v))
-	return 10 * ((r + 9) / 10)
+	return fmt.Sprintf("%.2f%s", dist, unitString)
 }
