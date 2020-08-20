@@ -9,12 +9,11 @@ import (
 	"strconv"
 	"strings"
 
+	log "github.com/sirupsen/logrus"
 	"github.com/umahmood/haversine"
 
 	"github.com/librespeed/speedtest/config"
 	"github.com/librespeed/speedtest/results"
-
-	log "github.com/sirupsen/logrus"
 )
 
 var (

@@ -3,11 +3,12 @@ package main
 import (
 	"flag"
 
+	log "github.com/sirupsen/logrus"
+
 	"github.com/librespeed/speedtest/config"
 	"github.com/librespeed/speedtest/database"
 	"github.com/librespeed/speedtest/results"
 	"github.com/librespeed/speedtest/web"
-	log "github.com/sirupsen/logrus"
 )
 
 var (
