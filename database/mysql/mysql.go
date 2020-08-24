@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	connectionStringTemplate = `%s:%s@%s/%s`
+	connectionStringTemplate = `%s:%s@%s/%s?parseTime=true`
 )
 
 type MySQL struct {
