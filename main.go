@@ -17,14 +17,7 @@ var (
 
 func main() {
 	flag.Parse()
-
-	var conf config.Config
-	if *optConfig != "" {
-		conf = config.LoadFile(*optConfig)
-	} else {
-		conf = config.Load()
-	}
-
+	conf := config.Load(*optConfig)
 	web.SetServerLocation(&conf)
 	results.Initialize(&conf)
 	database.SetDBInfo(&conf)

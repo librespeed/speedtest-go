@@ -1,8 +1,6 @@
 package config
 
 import (
-	"os"
-
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 )
@@ -30,6 +28,7 @@ type Config struct {
 }
 
 var (
+	configFile   string  = ""
 	loadedConfig *Config = nil
 )
 
@@ -51,8 +50,12 @@ func init() {
 	viper.AddConfigPath(".")
 }
 
-func Load() Config {
+func Load(configPath string) Config {
 	var conf Config
+
+	configFile = configPath
+	viper.SetConfigFile(configPath)
+
 	if err := viper.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
 			log.Warnf("No config file found in search paths, using default values")
@@ -70,33 +73,9 @@ func Load() Config {
 	return conf
 }
 
-func LoadFile(configFile string) Config {
-	var conf Config
-
-	f, err := os.OpenFile(configFile, os.O_RDONLY, 0444)
-
-	if err != nil {
-		log.Fatalf("Failed to open config file: %s", err)
-	}
-
-	defer f.Close()
-
-	if err := viper.ReadConfig(f); err != nil {
-		log.Fatalf("Error reading config: %s", err)
-	}
-
-	if err := viper.Unmarshal(&conf); err != nil {
-		log.Fatalf("Error parsing config: %s", err)
-	}
-
-	loadedConfig = &conf
-
-	return conf
-}
-
 func LoadedConfig() *Config {
 	if loadedConfig == nil {
-		Load()
+		Load(configFile)
 	}
 	return loadedConfig
 }
