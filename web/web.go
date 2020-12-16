@@ -86,7 +86,7 @@ func listenProxyProtocol(conf *config.Config, r *chi.Mux) {
 		addr := net.JoinHostPort(conf.BindAddress, conf.ProxyProtocolPort)
 		l, err := net.Listen("tcp", addr)
 		if err != nil {
-			log.Fatal("Cannot listen on proxy protocol port %s: %s", conf.ProxyProtocolPort, err)
+			log.Fatalf("Cannot listen on proxy protocol port %s: %s", conf.ProxyProtocolPort, err)
 		}
 
 		pl := &proxyproto.Listener{Listener: l}
@@ -108,8 +108,12 @@ func pages(w http.ResponseWriter, r *http.Request) {
 }
 
 func empty(w http.ResponseWriter, r *http.Request) {
-	io.Copy(ioutil.Discard, r.Body)
-	r.Body.Close()
+	_, err := io.Copy(ioutil.Discard, r.Body)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	_ = r.Body.Close()
 
 	w.Header().Set("Connection", "keep-alive")
 	w.WriteHeader(http.StatusOK)
@@ -129,7 +133,7 @@ func garbage(w http.ResponseWriter, r *http.Request) {
 		i, err := strconv.ParseInt(ckSize, 10, 64)
 		if err != nil {
 			log.Errorf("Invalid chunk size: %s", ckSize)
-			log.Warn("Will use default value %d", chunks)
+			log.Warnf("Will use default value %d", chunks)
 		} else {
 			// limit max chunk size to 1024
 			if i > 1024 {
