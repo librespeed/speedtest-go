@@ -347,8 +347,8 @@ func DrawPNG(w http.ResponseWriter, r *http.Request) {
 	var ispString string
 	if strings.Contains(result.ProcessedString, "-") {
 		str := strings.SplitN(result.ProcessedString, "-", 2)
-		if strings.Contains(str[0], "(") {
-			str = strings.SplitN(str[0], "(", 2)
+		if strings.Contains(str[1], "(") {
+			str = strings.SplitN(str[1], "(", 2)
 		}
 		ispString = str[0]
 	}
