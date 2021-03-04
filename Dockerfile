@@ -13,11 +13,13 @@ FROM alpine:3.9
 RUN apk add ca-certificates
 
 RUN adduser -h /app/ -H -S speedtestuser
+RUN chmod -R 0755 /app
+RUN chown speedtestuser /app
 WORKDIR /app
 USER speedtestuser
-COPY --from=build_base /go/src/github.com/librespeed/speedtest-go/speedtest .
-COPY --from=build_base /go/src/github.com/librespeed/speedtest-go/assets ./assets
-COPY --from=build_base /go/src/github.com/librespeed/speedtest-go/settings.toml .
+COPY --from=build_base --chown=speedtestuser /go/src/github.com/librespeed/speedtest-go/speedtest .
+COPY --from=build_base --chown=speedtestuser /go/src/github.com/librespeed/speedtest-go/assets ./assets
+COPY --from=build_base --chown=speedtestuser /go/src/github.com/librespeed/speedtest-go/settings.toml .
 #COPY --from=build_base /etc/passwd /etc/passwd
 
 EXPOSE 8989
