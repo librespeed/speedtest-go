@@ -14,7 +14,7 @@ RUN apk add ca-certificates
 
 RUN adduser -h /app/ -H -S speedtestuser
 #RUN chmod -R 0755 /app
-RUN chown speedtestuser /app
+#RUN chown speedtestuser /app
 USER speedtestuser
 WORKDIR /app
 
