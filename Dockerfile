@@ -15,6 +15,7 @@ WORKDIR /app
 COPY --from=build_base /go/src/github.com/librespeed/speedtest-go/speedtest .
 COPY --from=build_base /go/src/github.com/librespeed/speedtest-go/assets ./assets
 COPY --from=build_base /go/src/github.com/librespeed/speedtest-go/settings.toml .
+COPY --from=build_base /etc/passwd /etc/passwd
 
 EXPOSE 8989
 USER speedtestuser
