@@ -5,7 +5,7 @@ RUN apk add --no-cache git gcc ca-certificates libc-dev \
 && mkdir -p /go/src/github.com/librespeed/ \
 && cd /go/src/github.com/librespeed/ \
 && git clone https://github.com/librespeed/speedtest-go.git
-RUN useradd --home /app/ -M speedtestuser
+RUN adduser -h /app/ -H speedtestuser
 WORKDIR /go/src/github.com/librespeed/speedtest-go
 RUN go get ./ && go build -ldflags "-w -s" -trimpath -o speedtest main.go
 
