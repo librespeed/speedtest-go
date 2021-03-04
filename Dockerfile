@@ -12,11 +12,12 @@ RUN go get ./ && go build -ldflags "-w -s" -trimpath -o speedtest main.go
 FROM alpine:3.9
 RUN apk add ca-certificates
 WORKDIR /app
+USER speedtestuser
 COPY --from=build_base /go/src/github.com/librespeed/speedtest-go/speedtest .
 COPY --from=build_base /go/src/github.com/librespeed/speedtest-go/assets ./assets
 COPY --from=build_base /go/src/github.com/librespeed/speedtest-go/settings.toml .
 COPY --from=build_base /etc/passwd /etc/passwd
 
 EXPOSE 8989
-USER speedtestuser
+
 CMD ["./speedtest"]
