@@ -44,7 +44,6 @@ func ListenAndServe(conf *config.Config) error {
 
 	r.Use(cs.Handler)
 	r.Use(middleware.NoCache)
-	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 
 	addr := net.JoinHostPort(conf.BindAddress, conf.Port)
