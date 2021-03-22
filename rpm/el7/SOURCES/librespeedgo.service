@@ -1,0 +1,29 @@
+[Unit]
+Description=Librespeed speed test
+After=network.target
+
+[Service]
+Type=simple
+User=librespeedgo
+Group=librespeedgo
+WorkingDirectory=/usr/share/librespeedgo/
+ExecStart=/usr/bin/librespeedgo -c /etc/librespeedgo/settings.toml
+
+DevicePolicy=closed
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateUsers=yes
+ProtectControlGroups=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+ReadWritePaths=/var/lib/librespeedgo
+ReadWritePaths=/etc/librespeedgo/settings.toml
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=true
+MemoryDenyWriteExecute=yes
+
+[Install]
+WantedBy=multi-user.target
