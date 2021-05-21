@@ -68,7 +68,7 @@ func getIPInfo(addr string) results.IPInfoResponse {
 }
 
 func SetServerLocation(conf *config.Config) {
-	if conf.ServerLat > 0 && conf.ServerLng > 0 {
+	if conf.ServerLat != 0 || conf.ServerLng != 0 {
 		log.Infof("Configured server coordinates: %.6f, %.6f", conf.ServerLat, conf.ServerLng)
 		serverCoord.Lat = conf.ServerLat
 		serverCoord.Lon = conf.ServerLng
