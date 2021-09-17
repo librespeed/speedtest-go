@@ -7,11 +7,11 @@
 
 // data reported to main thread
 var testState = -1; // -1=not started, 0=starting, 1=download test, 2=ping+jitter test, 3=upload test, 4=finished, 5=abort
-var dlStatus = ""; // download speed in Mbit/s with 2 decimal digits
-var ulStatus = ""; // upload speed in Mbit/s with 2 decimal digits
+var dlStatus = ""; // download speed in megabit/s with 2 decimal digits
+var ulStatus = ""; // upload speed in megabit/s with 2 decimal digits
 var pingStatus = ""; // ping in milliseconds with 2 decimal digits
 var jitterStatus = ""; // jitter in milliseconds with 2 decimal digits
-var clientIp = ""; // client's IP address as reported by getIP
+var clientIp = ""; // client's IP address as reported by getIP.php
 var dlProgress = 0; //progress of download test 0-1
 var ulProgress = 0; //progress of upload test 0-1
 var pingProgress = 0; //progress of ping+jitter test 0-1
@@ -45,10 +45,10 @@ var settings = {
 	time_ulGraceTime: 3, //time to wait in seconds before actually measuring ul speed (wait for buffers to fill)
 	time_dlGraceTime: 1.5, //time to wait in seconds before actually measuring dl speed (wait for TCP window to increase)
 	count_ping: 10, // number of pings to perform in ping test
-	url_dl: "backend/garbage", // path to a large file or garbage.php, used for download test. must be relative to this js file
-	url_ul: "backend/empty", // path to an empty file, used for upload test. must be relative to this js file
-	url_ping: "backend/empty", // path to an empty file, used for ping test. must be relative to this js file
-	url_getIp: "backend/getIP", // path to getIP.php relative to this js file, or a similar thing that outputs the client's ip
+	url_dl: "backend/garbage.php", // path to a large file or garbage.php, used for download test. must be relative to this js file
+	url_ul: "backend/empty.php", // path to an empty file, used for upload test. must be relative to this js file
+	url_ping: "backend/empty.php", // path to an empty file, used for ping test. must be relative to this js file
+	url_getIp: "backend/getIP.php", // path to getIP.php relative to this js file, or a similar thing that outputs the client's ip
 	getIp_ispInfo: true, //if set to true, the server will include ISP info with the IP address
 	getIp_ispInfo_distance: "km", //km or mi=estimate distance from server in km/mi; set to false to disable distance estimation. getIp_ispInfo must be enabled in order for this to work
 	xhr_dlMultistream: 6, // number of download streams to use (can be different if enable_quirks is active)
@@ -61,10 +61,11 @@ var settings = {
 	enable_quirks: true, // enable quirks for specific browsers. currently it overrides settings to optimize for specific browsers, unless they are already being overridden with the start command
 	ping_allowPerformanceApi: true, // if enabled, the ping test will attempt to calculate the ping more precisely using the Performance API. Currently works perfectly in Chrome, badly in Edge, and not at all in Firefox. If Performance API is not supported or the result is obviously wrong, a fallback is provided.
 	overheadCompensationFactor: 1.06, //can be changed to compensatie for transport overhead. (see doc.md for some other values)
-	useMebibits: false, //if set to true, speed will be reported in Mibit/s instead of Mbit/s
+	useMebibits: false, //if set to true, speed will be reported in mebibits/s instead of megabits/s
 	telemetry_level: 0, // 0=disabled, 1=basic (results only), 2=full (results and timing) 3=debug (results+log)
-	url_telemetry: "results/telemetry", // path to the script that adds telemetry data to the database
-	telemetry_extra: "" //extra data that can be passed to the telemetry through the settings
+	url_telemetry: "results/telemetry.php", // path to the script that adds telemetry data to the database
+	telemetry_extra: "", //extra data that can be passed to the telemetry through the settings
+    forceIE11Workaround: false //when set to true, it will foce the IE11 upload test on all browsers. Debug only
 };
 
 var xhr = null; // array of currently active xhr requests
@@ -403,8 +404,8 @@ function dlTest(done) {
 				var speed = totLoaded / (t / 1000.0);
 				if (settings.time_auto) {
 					//decide how much to shorten the test. Every 200ms, the test is shortened by the bonusT calculated here
-					var bonus = (6.4 * speed) / 100000;
-					bonusT += bonus > 800 ? 800 : bonus;
+					var bonus = (5.0 * speed) / 100000;
+					bonusT += bonus > 400 ? 400 : bonus;
 				}
 				//update status
 				dlStatus = ((speed * 8 * settings.overheadCompensationFactor) / (settings.useMebibits ? 1048576 : 1000000)).toFixed(2); // speed is multiplied by 8 to go from bytes to bits, overhead compensation is applied, then everything is divided by 1048576 or 1000000 to go to megabits/mebibits
@@ -551,8 +552,8 @@ function ulTest(done) {
 					var speed = totLoaded / (t / 1000.0);
 					if (settings.time_auto) {
 						//decide how much to shorten the test. Every 200ms, the test is shortened by the bonusT calculated here
-						var bonus = (6.4 * speed) / 100000;
-						bonusT += bonus > 800 ? 800 : bonus;
+						var bonus = (5.0 * speed) / 100000;
+						bonusT += bonus > 400 ? 400 : bonus;
 					}
 					//update status
 					ulStatus = ((speed * 8 * settings.overheadCompensationFactor) / (settings.useMebibits ? 1048576 : 1000000)).toFixed(2); // speed is multiplied by 8 to go from bytes to bits, overhead compensation is applied, then everything is divided by 1048576 or 1000000 to go to megabits/mebibits
