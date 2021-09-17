@@ -28,7 +28,7 @@ type Config struct {
 }
 
 var (
-	configFile   string  = ""
+	configFile   string
 	loadedConfig *Config = nil
 )
 
@@ -40,7 +40,6 @@ func init() {
 	viper.SetDefault("enable_cors", false)
 	viper.SetDefault("statistics_password", "PASSWORD")
 	viper.SetDefault("redact_ip_addresses", false)
-	viper.SetDefault("assets_path", "./assets")
 	viper.SetDefault("database_type", "postgresql")
 	viper.SetDefault("database_hostname", "localhost")
 	viper.SetDefault("database_name", "speedtest")

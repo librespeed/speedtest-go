@@ -1,11 +1,14 @@
 package web
 
 import (
+	"embed"
 	"encoding/json"
 	"io"
+	"io/fs"
 	"io/ioutil"
 	"net"
 	"net/http"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -25,6 +28,9 @@ const (
 	// chunk size is 1 mib
 	chunkSize = 1048576
 )
+
+//go:embed assets
+var defaultAssets embed.FS
 
 var (
 	// generate random data for download test on start to minimize runtime overhead
@@ -46,9 +52,21 @@ func ListenAndServe(conf *config.Config) error {
 	r.Use(middleware.NoCache)
 	r.Use(middleware.Recoverer)
 
+	var assetFS http.FileSystem
+	if fi, err := os.Stat(conf.AssetsPath); os.IsNotExist(err) || !fi.IsDir() {
+		log.Warnf("Configured asset path %s does not exist or is not a directory, using default assets", conf.AssetsPath)
+		sub, err := fs.Sub(defaultAssets, "assets")
+		if err != nil {
+			log.Fatalf("Failed when processing default assets: %s", err)
+		}
+		assetFS = http.FS(sub)
+	} else {
+		assetFS = justFilesFilesystem{fs: http.Dir(conf.AssetsPath), readDirBatchSize: 2}
+	}
+
 	addr := net.JoinHostPort(conf.BindAddress, conf.Port)
 	log.Infof("Starting backend server on %s", addr)
-	r.Get("/*", pages)
+	r.Get("/*", pages(assetFS))
 	r.HandleFunc("/empty", empty)
 	r.HandleFunc("/backend/empty", empty)
 	r.Get("/garbage", garbage)
@@ -96,14 +114,16 @@ func listenProxyProtocol(conf *config.Config, r *chi.Mux) {
 	}
 }
 
-func pages(w http.ResponseWriter, r *http.Request) {
-	if r.RequestURI == "/" {
-		r.RequestURI = "/index.html"
+func pages(fs http.FileSystem) http.HandlerFunc {
+	fn := func(w http.ResponseWriter, r *http.Request) {
+		if r.RequestURI == "/" {
+			r.RequestURI = "/index.html"
+		}
+
+		http.FileServer(fs).ServeHTTP(w, r)
 	}
 
-	conf := config.LoadedConfig()
-	fs := justFilesFilesystem{fs: http.Dir(conf.AssetsPath), readDirBatchSize: 2}
-	http.FileServer(fs).ServeHTTP(w, r)
+	return fn
 }
 
 func empty(w http.ResponseWriter, r *http.Request) {

@@ -1,16 +1,15 @@
 package results
 
 import (
+	_ "embed"
 	"encoding/json"
 	"image"
 	"image/color"
 	"image/draw"
 	"image/png"
-	"io/ioutil"
 	"math/rand"
 	"net"
 	"net/http"
-	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
@@ -36,6 +35,12 @@ const (
 	labelDownload = "Download"
 	labelUpload   = "Upload"
 )
+
+//go:embed fonts/NotoSansDisplay-Medium.ttf
+var fontMediumBytes []byte
+
+//go:embed fonts/NotoSansDisplay-Light.ttf
+var fontLightBytes []byte
 
 var (
 	ipv4Regex     = regexp.MustCompile(`(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)`)
@@ -83,25 +88,17 @@ type IPInfoResponse struct {
 func Initialize(c *config.Config) {
 	// changed to use Noto Sans instead of OpenSans, due to issue:
 	// https://github.com/golang/freetype/issues/8
-	if b, err := ioutil.ReadFile(filepath.Join(c.AssetsPath, "NotoSansDisplay-Light.ttf")); err != nil {
-		log.Fatalf("Error opening NotoSansDisplay-Light font: %s", err)
-	} else {
-		f, err := freetype.ParseFont(b)
-		if err != nil {
-			log.Fatalf("Error parsing NotoSansDisplay-Light font: %s", err)
-		}
-		fontLight = f
+	fLight, err := freetype.ParseFont(fontLightBytes)
+	if err != nil {
+		log.Fatalf("Error parsing NotoSansDisplay-Light font: %s", err)
 	}
+	fontLight = fLight
 
-	if b, err := ioutil.ReadFile(filepath.Join(c.AssetsPath, "NotoSansDisplay-Medium.ttf")); err != nil {
-		log.Fatalf("Error opening NotoSansDisplay-Medium font: %s", err)
-	} else {
-		f, err := freetype.ParseFont(b)
-		if err != nil {
-			log.Fatalf("Error parsing NotoSansDisplay-Medium font: %s", err)
-		}
-		fontBold = f
+	fMedium, err := freetype.ParseFont(fontMediumBytes)
+	if err != nil {
+		log.Fatalf("Error parsing NotoSansDisplay-Medium font: %s", err)
 	}
+	fontBold = fMedium
 
 	pingJitterLabelFace = truetype.NewFace(fontBold, &truetype.Options{
 		Size:    12,

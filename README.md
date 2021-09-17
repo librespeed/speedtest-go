@@ -34,16 +34,16 @@ Works with mobile versions too.
 
 ## Installation
 
-You need Go 1.13+ to compile the binary. If you have an older version of Go and don't want to install the tarball
+You need Go 1.16+ to compile the binary. If you have an older version of Go and don't want to install the tarball
 manually, you can install newer version of Go into your `GOPATH`:
 
-0. Install Go 1.14
+0. Install Go 1.17
 
    ```
-   $ go get golang.org/dl/go1.14.2
-   # Assuming your GOPATH is default (~/go), Go 1.14.2 will be installed in ~/go/bin
-   $ ~/go/bin/go1.14.2 version
-   go version go1.14.2 linux/amd64
+   $ go get golang.org/dl/go1.17.1
+   # Assuming your GOPATH is default (~/go), Go 1.17.1 will be installed in ~/go/bin
+   $ ~/go/bin/go1.17.1 version
+   go version go1.17.1 linux/amd64
    ```
 
 1. Clone this repository:
@@ -98,6 +98,7 @@ manually, you can install newer version of Go into your `GOPATH`:
     ipinfo_api_key=""
    
     # assets directory path, defaults to `assets` in the same directory
+    # if the path cannot be found, embedded default assets will be used
     assets_path="./assets"
 
     # password for logging into statistics page, change this to enable stats page
