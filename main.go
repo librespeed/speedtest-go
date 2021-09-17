@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 
+	_ "github.com/breml/rootcerts"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/librespeed/speedtest/config"
