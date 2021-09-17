@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-chi/render"
 	"github.com/librespeed/speedtest/config"
 	"github.com/librespeed/speedtest/database"
 	"github.com/librespeed/speedtest/database/schema"
@@ -144,6 +145,12 @@ func Initialize(c *config.Config) {
 }
 
 func Record(w http.ResponseWriter, r *http.Request) {
+	conf := config.LoadedConfig()
+	if conf.DatabaseType == "none" {
+		render.PlainText(w, r, "Telemetry is disabled")
+		return
+	}
+
 	ipAddr, _, _ := net.SplitHostPort(r.RemoteAddr)
 	userAgent := r.UserAgent()
 	language := r.Header.Get("Accept-Language")
@@ -201,6 +208,12 @@ func Record(w http.ResponseWriter, r *http.Request) {
 }
 
 func DrawPNG(w http.ResponseWriter, r *http.Request) {
+	conf := config.LoadedConfig()
+
+	if conf.DatabaseType == "none" {
+		return
+	}
+
 	uuid := r.FormValue("id")
 	record, err := database.DB.FetchByUUID(uuid)
 	if err != nil {

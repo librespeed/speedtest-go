@@ -5,12 +5,10 @@ import (
 	"errors"
 	"time"
 
-	"go.etcd.io/bbolt"
-
 	"github.com/librespeed/speedtest/database/schema"
 
-	_ "github.com/go-sql-driver/mysql"
 	log "github.com/sirupsen/logrus"
+	"go.etcd.io/bbolt"
 )
 
 const (

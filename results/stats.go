@@ -4,6 +4,7 @@ import (
 	"html/template"
 	"net/http"
 
+	"github.com/go-chi/render"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/librespeed/speedtest/config"
@@ -27,6 +28,12 @@ func Stats(w http.ResponseWriter, r *http.Request) {
 	}
 
 	conf := config.LoadedConfig()
+
+	if conf.DatabaseType == "none" {
+		render.PlainText(w, r, "Statistics are disabled")
+		return
+	}
+
 	var data StatsData
 
 	if conf.StatsPassword == "PASSWORD" {
