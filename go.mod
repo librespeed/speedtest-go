@@ -3,6 +3,7 @@ module github.com/librespeed/speedtest
 go 1.16
 
 require (
+	github.com/breml/rootcerts v0.1.0 // indirect
 	github.com/fsnotify/fsnotify v1.5.1 // indirect
 	github.com/go-chi/chi/v5 v5.0.4
 	github.com/go-chi/cors v1.2.0

@@ -2,13 +2,15 @@ package main
 
 import (
 	"flag"
-
-	log "github.com/sirupsen/logrus"
+	_ "time/tzdata"
 
 	"github.com/librespeed/speedtest/config"
 	"github.com/librespeed/speedtest/database"
 	"github.com/librespeed/speedtest/results"
 	"github.com/librespeed/speedtest/web"
+
+	_ "github.com/breml/rootcerts"
+	log "github.com/sirupsen/logrus"
 )
 
 var (
