@@ -3,6 +3,8 @@ package main
 import (
 	"flag"
 
+	_ "time/tzdata"
+
 	log "github.com/sirupsen/logrus"
 
 	"github.com/librespeed/speedtest/config"
