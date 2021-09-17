@@ -106,7 +106,7 @@ manually, you can install newer version of Go into your `GOPATH`:
     # redact IP addresses
     redact_ip_addresses=false
 
-    # database type for statistics data, currently supports: none, bolt, mysql, postgresql
+    # database type for statistics data, currently supports: none, memory, bolt, mysql, postgresql
     # if none is specified, no telemetry/stats will be recorded, and no result PNG will be generated
     database_type="postgresql"
     database_hostname="localhost"

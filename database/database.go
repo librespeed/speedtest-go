@@ -3,6 +3,7 @@ package database
 import (
 	"github.com/librespeed/speedtest/config"
 	"github.com/librespeed/speedtest/database/bolt"
+	"github.com/librespeed/speedtest/database/memory"
 	"github.com/librespeed/speedtest/database/mysql"
 	"github.com/librespeed/speedtest/database/none"
 	"github.com/librespeed/speedtest/database/postgresql"
@@ -29,6 +30,8 @@ func SetDBInfo(conf *config.Config) {
 		DB = mysql.Open(conf.DatabaseHostname, conf.DatabaseUsername, conf.DatabasePassword, conf.DatabaseName)
 	case "bolt":
 		DB = bolt.Open(conf.DatabaseFile)
+	case "memory":
+		DB = memory.Open("")
 	case "none":
 		DB = none.Open("")
 	default:
