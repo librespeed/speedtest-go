@@ -85,7 +85,6 @@ archives:
     files:
       - README.md
       - LICENSE
-      - assets/*
       - settings.toml
 checksum:
   name_template: 'checksums.txt'
