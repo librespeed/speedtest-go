@@ -12,7 +12,7 @@ FROM alpine:3.9
 RUN apk add ca-certificates
 WORKDIR /app
 COPY --from=build_base /go/src/github.com/librespeed/speedtest-go/speedtest .
-COPY --from=build_base /go/src/github.com/librespeed/speedtest-go/assets ./assets
+COPY --from=build_base /go/src/github.com/librespeed/speedtest-go/web/assets ./assets
 COPY --from=build_base /go/src/github.com/librespeed/speedtest-go/settings.toml .
 
 EXPOSE 8989
