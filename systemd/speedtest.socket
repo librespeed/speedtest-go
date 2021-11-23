@@ -1,0 +1,11 @@
+# Socket listener systemd unit file for speedtest-go.  See the
+# systemd.socket(5) manual page for many more options.
+[Unit]
+Description=Speedtest Web Server (http port 80) Socket
+
+[Socket]
+ListenStream=80
+Accept=no
+
+[Install]
+WantedBy=sockets.target

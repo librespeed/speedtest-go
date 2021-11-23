@@ -1,0 +1,135 @@
+# Systemd unit file for speedtest-go.  The defaults below are suitable for
+# running all configurations in a medium-security environment.  See comments
+# below for addtional caveats - particularly those labelled "IMPORTANT".
+
+# You can edit this file, or alternatively you may prefer to use systemd's
+# "override" mechanisms, to avoid editing this file e.g. using:
+
+# systemctl edit speedtest.service
+
+[Unit]
+Description=Speedtest-go Server
+After=syslog.target network.target
+
+# Default to using socket activation (see accompanying socket unit file to
+# configure the bind address etc.).
+Requires=speedtest.socket
+After=speedtest.socket
+
+[Service]
+Type=simple
+# The paths to the installed binary and configuration file:
+
+ExecStart=/usr/local/bin/speedtest -c /usr/local/etc/speedtest-settings.toml
+#WorkingDirectory=/usr/local/share/speedtest
+#Restart=always
+#RestartSec=5
+
+# IMPORTANT!
+# If you use a database file (not server), then you will need to disable the
+# DynamicUser setting, and manually create the UNIX user and group specified
+# below, to ensure the file is accessible across multiple invocations of the
+# service.
+DynamicUser=true
+
+# You may prefer to use a different user or group name on your system.
+User=speedtest
+Group=speedtest
+
+
+# The following options will work for all configurations, but are not the
+# most secure, so you are advised to customise them as described below:
+
+# If NOT using socket activation, or if using socket activation AND
+# connecting to an external database server (MySQL, postgres) via TCP:
+RestrictAddressFamilies=AF_INET AF_INET6
+
+# If connecting to an external database via unix domain sockets (MySQL
+# default to this mode of operation):
+RestrictAddressFamilies=AF_UNIX
+
+# If using 'none', 'memory', or 'bolt' database types, and socket activation
+# then the process will not need to bind to any new sockets, so we can remove
+# the earlier AF_UNIX option again.  In systemd versions before 249 this is
+# the only way to say "Restrict the use of all address families":
+RestrictAddressFamilies=AF_UNIX
+RestrictAddressFamilies=~AF_UNIX
+# ...in systemd version 249 and later, we can instead use the much clearer:
+#RestrictAddressFamilies=none
+
+# The following options are available (in systemd v247) to restrict the
+# actions of the speedtest server for reasons of increased security.
+
+# As a whole, the purpose of these are to provide an additional layer of
+# security by mitigating any unknown security vulnerabilities which may exist
+# in speedtest or in the libraries, tools and operating system components
+# which it relies upon.
+
+# IMPORTANT!
+# The following line must be customised to your individual requirements.
+# e.g. if using the 'bolt' in-process database type:
+ReadWritePaths=/usr/local/var/speedtest
+
+# Makes created files group-readable, but inaccessible by others
+UMask=027
+
+# Many of the following options are desribed in the systemd.resource-control(5)
+# manual page.
+
+# The following may be useful in your environment:
+#IPAddressDeny=
+#IPAddressAllow=
+#IPAccounting=true
+#IPIngressFilterPath=
+#SocketBindAllow=
+
+# If your system doesn't support all of the features below (e.g. because of
+# the use of a version of systemd older than 247), you may need to comment-out
+# some of the following lines.
+
+# n.b. It may be possible to further restrict speedtest, but this is a good
+# start, and will guard against many potential zero-day vulnerabilities.
+
+# See the output of `systemd-analyze security speedtest.service` for further
+# opportunities.  Patches welcome!
+
+CapabilityBoundingSet=
+LockPersonality=true
+MemoryDenyWriteExecute=true
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=true
+PrivateUsers=true
+ProtectSystem=strict
+ProtectHome=yes
+ProtectClock=true
+ProtectControlGroups=true
+ProtectKernelLogs=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectProc=invisible
+ProtectHostname=true
+RemoveIPC=true
+RestrictNamespaces=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+
+# Additionally, you may wish to use some of the systemd options documented in
+# systemd.resource-control(5) to limit the CPU, memory, file-system I/O and
+# network I/O that the speedtest server is permitted to consume according to
+# the individual requirements of your installation.
+
+#CPUQuota=25%
+#MemoryMax=bytes
+#MemorySwapMax=bytes
+#TasksMax=N
+#IOReadBandwidthMax=device bytes
+#IOWriteBandwidthMax=device bytes
+#IOReadIOPSMax=device IOPS, IOWriteIOPSMax=device IOPS
+#IPAccounting=true
+#IPAddressAllow=
+
+[Install]
+WantedBy=multi-user.target
