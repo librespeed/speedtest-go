@@ -8,7 +8,7 @@ RUN apk add --no-cache git gcc ca-certificates libc-dev \
 WORKDIR /go/src/github.com/librespeed/speedtest-go
 RUN go get ./ && go build -ldflags "-w -s" -trimpath -o speedtest main.go
 
-FROM alpine:3.9
+FROM alpine:3.15
 RUN apk add ca-certificates
 WORKDIR /app
 COPY --from=build_base /go/src/github.com/librespeed/speedtest-go/speedtest .
