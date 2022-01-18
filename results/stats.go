@@ -7,6 +7,8 @@ import (
 	"github.com/go-chi/render"
 	log "github.com/sirupsen/logrus"
 
+	"github.com/gorilla/securecookie"
+	"github.com/gorilla/sessions"
 	"github.com/librespeed/speedtest/config"
 	"github.com/librespeed/speedtest/database"
 	"github.com/librespeed/speedtest/database/schema"
@@ -16,6 +18,20 @@ type StatsData struct {
 	NoPassword bool
 	LoggedIn   bool
 	Data       []schema.TelemetryData
+}
+
+var (
+	key   = []byte(securecookie.GenerateRandomKey(32))
+	store = sessions.NewCookieStore(key)
+)
+
+func init() {
+	store.Options = &sessions.Options{
+		Path:     "/stats",
+		MaxAge:   3600 * 1, // 1 hour
+		HttpOnly: true,
+		SameSite: http.SameSiteStrictMode,
+	}
 }
 
 func Stats(w http.ResponseWriter, r *http.Request) {
@@ -42,15 +58,14 @@ func Stats(w http.ResponseWriter, r *http.Request) {
 
 	if !data.NoPassword {
 		op := r.FormValue("op")
-		c, _ := r.Cookie("logged")
+		session, _ := store.Get(r, "logged")
+		auth, ok := session.Values["authenticated"].(bool)
 
-		if c != nil && c.Value == "true" {
+		if auth && ok {
 			if op == "logout" {
-				cookie := &http.Cookie{
-					Name:  "logged",
-					Value: "false",
-				}
-				http.SetCookie(w, cookie)
+				session.Values["authenticated"] = false
+				session.Options.MaxAge = -1
+				session.Save(r, w)
 				http.Redirect(w, r, "/stats", http.StatusTemporaryRedirect)
 			} else {
 				data.LoggedIn = true
@@ -78,13 +93,11 @@ func Stats(w http.ResponseWriter, r *http.Request) {
 			}
 		} else {
 			if op == "login" {
+				session, _ := store.Get(r, "logged")
 				password := r.FormValue("password")
 				if password == conf.StatsPassword {
-					cookie := &http.Cookie{
-						Name:  "logged",
-						Value: "true",
-					}
-					http.SetCookie(w, cookie)
+					session.Values["authenticated"] = true
+					session.Save(r, w)
 					http.Redirect(w, r, "/stats", http.StatusTemporaryRedirect)
 				} else {
 					w.WriteHeader(http.StatusForbidden)
