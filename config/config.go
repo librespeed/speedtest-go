@@ -25,6 +25,11 @@ type Config struct {
 	DatabasePassword string `mapstructure:"database_password"`
 
 	DatabaseFile string `mapstructure:"database_file"`
+
+	EnableHTTP2 bool   `mapstructure:"enable_http2"`
+	EnableTLS   bool   `mapstructure:"enable_tls"`
+	TLSCertFile string `mapstructure:"tls_cert_file"`
+	TLSKeyFile  string `mapstructure:"tls_key_file"`
 }
 
 var (
@@ -44,6 +49,8 @@ func init() {
 	viper.SetDefault("database_hostname", "localhost")
 	viper.SetDefault("database_name", "speedtest")
 	viper.SetDefault("database_username", "postgres")
+	viper.SetDefault("enable_tls", false)
+	viper.SetDefault("enable_http2", false)
 
 	viper.SetConfigName("settings")
 	viper.AddConfigPath(".")

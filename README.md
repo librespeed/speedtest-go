@@ -116,6 +116,14 @@ manually, you can install newer version of Go into your `GOPATH`:
 
     # if you use `bolt` as database, set database_file to database file location
     database_file="speedtest.db"
+
+    # TLS and HTTP/2 settings. TLS is required for HTTP/2
+    enable_tls=false
+    enable_http2=false
+
+    # if you use HTTP/2 or TLS, you need to prepare certificates and private keys
+    # tls_cert_file="cert.pem"
+    # tls_key_file="privkey.pem"
     ```
 
 ## Differences between Go and PHP implementation and caveats
