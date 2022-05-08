@@ -2,6 +2,8 @@
 bind_address=""
 # backend listen port
 listen_port=8989
+# change the base URL
+# url_base="/librespeed"
 # proxy protocol port, use 0 to disable
 proxyprotocol_port=0
 # Server location
