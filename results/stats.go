@@ -66,7 +66,7 @@ func Stats(w http.ResponseWriter, r *http.Request) {
 				session.Values["authenticated"] = false
 				session.Options.MaxAge = -1
 				session.Save(r, w)
-				http.Redirect(w, r, "/stats", http.StatusTemporaryRedirect)
+				http.Redirect(w, r, conf.BaseURL+"/stats", http.StatusTemporaryRedirect)
 			} else {
 				data.LoggedIn = true
 
@@ -98,7 +98,7 @@ func Stats(w http.ResponseWriter, r *http.Request) {
 				if password == conf.StatsPassword {
 					session.Values["authenticated"] = true
 					session.Save(r, w)
-					http.Redirect(w, r, "/stats", http.StatusTemporaryRedirect)
+					http.Redirect(w, r, conf.BaseURL+"/stats", http.StatusTemporaryRedirect)
 				} else {
 					w.WriteHeader(http.StatusForbidden)
 				}
