@@ -34,6 +34,19 @@ Works with mobile versions too.
 
 ## Installation
 
+### Install using prebuilt binaries
+
+1. Download the appropriate binary file from the [releases](https://github.com/librespeed/speedtest-go/releases/) page.
+2. Unzip the archive.
+3. Make changes to the configuration.
+4. Run the binary.
+5. Optional: Setup a systemd service file.
+
+### Use Ansible for automatic installation
+
+You can use an Ansible role for installing speedtest-go easily. You can find the role on the [Ansible galaxy](https://galaxy.ansible.com/flymia/ansible_speedtest_go). There is a [separate repository](https://github.com/flymia/ansible-speedtest_go) for documentation about the Ansible role.
+### Compile from source
+
 You need Go 1.16+ to compile the binary. If you have an older version of Go and don't want to install the tarball
 manually, you can install newer version of Go into your `GOPATH`:
 
