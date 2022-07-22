@@ -54,7 +54,7 @@ func startListener(conf *config.Config, r *chi.Mux) error {
 		}
 		s = http.Serve(listeners[0], r)
 	default:
-		log.Fatalf("Asked to listen on %s sockets via systemd activation.  Sorry we currently only support listening on 1 socket.", len(listeners))
+		log.Fatalf("Asked to listen on %d sockets via systemd activation.  Sorry we currently only support listening on 1 socket.", len(listeners))
 	}
 	return s
 }
