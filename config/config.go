@@ -63,14 +63,9 @@ func Load(configPath string) Config {
 
 	configFile = configPath
 	viper.SetConfigFile(configPath)
-
-	if err := viper.ReadInConfig(); err != nil {
-		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
-			log.Warnf("No config file found in search paths, using default values")
-		} else {
-			log.Fatalf("Error reading config: %s", err)
-		}
-	}
+	viper.SetEnvPrefix("speedtest")
+	viper.AutomaticEnv()
+	viper.ReadInConfig()
 
 	if err := viper.Unmarshal(&conf); err != nil {
 		log.Fatalf("Error parsing config: %s", err)
