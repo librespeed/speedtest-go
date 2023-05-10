@@ -21,18 +21,20 @@ type StatsData struct {
 }
 
 var (
-	key   = []byte(securecookie.GenerateRandomKey(32))
-	store = sessions.NewCookieStore(key)
-	conf = config.LoadedConfig()
+	store *sessions.CookieStore
+	conf  *config.Config
 )
 
-func init() {
+func statsInitialize(c *config.Config) {
+	key := []byte(securecookie.GenerateRandomKey(32))
+	store = sessions.NewCookieStore(key)
 	store.Options = &sessions.Options{
-		Path:     conf.BaseURL+"/stats",
+		Path:     c.BaseURL + "/stats",
 		MaxAge:   3600 * 1, // 1 hour
 		HttpOnly: true,
 		SameSite: http.SameSiteStrictMode,
 	}
+	conf = c
 }
 
 func Stats(w http.ResponseWriter, r *http.Request) {
