@@ -6,6 +6,7 @@ import (
 
 	"github.com/go-chi/render"
 	log "github.com/sirupsen/logrus"
+	"golang.org/x/crypto/bcrypt"
 
 	"github.com/gorilla/securecookie"
 	"github.com/gorilla/sessions"
@@ -21,8 +22,9 @@ type StatsData struct {
 }
 
 var (
-	store *sessions.CookieStore
-	conf  *config.Config
+	store         *sessions.CookieStore
+	conf          *config.Config
+	checkPassword func(password string) bool
 )
 
 func statsInitialize(c *config.Config) {
@@ -35,6 +37,19 @@ func statsInitialize(c *config.Config) {
 		SameSite: http.SameSiteStrictMode,
 	}
 	conf = c
+
+	// Check if StatsPassword is a valid bcrypt hash
+	if _, err := bcrypt.Cost([]byte(c.StatsPassword)); err == nil {
+		log.Println("statistics_password is valid bcrypt hash")
+		checkPassword = func(password string) bool {
+			return nil == bcrypt.CompareHashAndPassword([]byte(c.StatsPassword), []byte(password))
+		}
+
+	} else {
+		checkPassword = func(password string) bool {
+			return password == c.StatsPassword
+		}
+	}
 }
 
 func Stats(w http.ResponseWriter, r *http.Request) {
@@ -96,7 +111,7 @@ func Stats(w http.ResponseWriter, r *http.Request) {
 			if op == "login" {
 				session, _ := store.Get(r, "logged")
 				password := r.FormValue("password")
-				if password == conf.StatsPassword {
+				if checkPassword(password) {
 					session.Values["authenticated"] = true
 					session.Save(r, w)
 					http.Redirect(w, r, conf.BaseURL+"/stats", http.StatusTemporaryRedirect)
