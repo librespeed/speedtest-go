@@ -1,0 +1,30 @@
+# This is an example docker-compose.yml file for running the speedtest-go container.
+# You can run it with the following command:
+#
+#   docker compose up -d && docker compose logs -f
+#
+version: "3.8"
+services:
+  speedtest:
+    container_name: speedtest
+    build:
+      context: https://github.com/librespeed/speedtest-go.git
+    image: speedtest
+    ports:
+      - "8989:8989"
+    restart: unless-stopped
+    volumes:
+      # This example mounts the settings.toml file from the current directory as
+      # a volume. If the toml file is placed in a different directory, you will
+      # need to specify the full/absolute path to the file.
+      - ${PWD}/settings.toml:/app/settings.toml
+      # For custom themes:
+      # 1. Uncomment the following 2 lines to mount "assets" directory under "/app"
+      #    directory in the container. For more information, see the assets section
+      #    of "Compile from source" in the README.md file. Also note that the
+      #    path to the "assets" in local machine must be absolute.
+      #- ${PWD}/web/assets:/app/assets
+      #- ${PWD}/web/assets/example-singleServer-pretty.html:/app/assets/index.html
+      # 2. Edit the "assets_path" section in the settings.toml file to point the
+      #    assets directory to "/app/assets".
+      #      e.g.) assets_path = "./assets"
