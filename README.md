@@ -62,7 +62,7 @@ manually, you can install newer version of Go into your `GOPATH`:
 1. Clone this repository:
 
     ```
-    $ git clone github.com/librespeed/speedtest-go
+    $ git clone https://github.com/librespeed/speedtest-go
     ```
 
 2. Build
