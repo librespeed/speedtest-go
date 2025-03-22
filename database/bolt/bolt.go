@@ -5,7 +5,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/librespeed/speedtest/database/schema"
+	"github.com/librespeed/speedtest-go/database/schema"
 
 	log "github.com/sirupsen/logrus"
 	"go.etcd.io/bbolt"

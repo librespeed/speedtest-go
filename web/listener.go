@@ -6,7 +6,7 @@ package web
 import (
 	"crypto/tls"
 	"github.com/go-chi/chi/v5"
-	"github.com/librespeed/speedtest/config"
+	"github.com/librespeed/speedtest-go/config"
 	log "github.com/sirupsen/logrus"
 	"net"
 	"net/http"
