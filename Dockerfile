@@ -4,15 +4,14 @@ WORKDIR /build
 COPY go.mod go.sum ./
 RUN go mod download
 COPY ./ ./
+ENV CGO_ENABLED=0
 RUN go build -ldflags "-w -s" -trimpath -o speedtest .
 
-FROM alpine:3.16
-RUN apk add --no-cache ca-certificates
+FROM scratch
 WORKDIR /app
 COPY --from=build_base /build/speedtest ./
 COPY settings.toml ./
 
-USER nobody
 EXPOSE 8989
 
 CMD ["./speedtest"]
