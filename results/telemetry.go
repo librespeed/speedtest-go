@@ -167,8 +167,8 @@ func Record(w http.ResponseWriter, r *http.Request) {
 		ipAddr  = "0.0.0.0"
 		ispInfo = ipv4Regex.ReplaceAllString(ispInfo, "0.0.0.0")
 		logs    = ipv4Regex.ReplaceAllString(logs, "0.0.0.0")
-		ispInfo = ipv6Regex.ReplaceAllString(ispInfo, "0.0.0.0")
-		logs    = ipv6Regex.ReplaceAllString(logs, "0.0.0.0")
+		ispInfo = ipv6Regex.ReplaceAllString(ispInfo, "::")
+		logs    = ipv6Regex.ReplaceAllString(logs, "::")
 		ispInfo = hostnameRegex.ReplaceAllString(ispInfo, `"hostname":"REDACTED"`)
 		logs    = hostnameRegex.ReplaceAllString(logs, `"hostname":"REDACTED"`)
 	}
