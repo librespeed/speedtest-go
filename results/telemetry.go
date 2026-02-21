@@ -164,13 +164,13 @@ func Record(w http.ResponseWriter, r *http.Request) {
 	extra := r.FormValue("extra")
 
 	if config.LoadedConfig().RedactIP {
-		ipAddr = "0.0.0.0"
-		ipv4Regex.ReplaceAllString(ispInfo, "0.0.0.0")
-		ipv4Regex.ReplaceAllString(logs, "0.0.0.0")
-		ipv6Regex.ReplaceAllString(ispInfo, "0.0.0.0")
-		ipv6Regex.ReplaceAllString(logs, "0.0.0.0")
-		hostnameRegex.ReplaceAllString(ispInfo, `"hostname":"REDACTED"`)
-		hostnameRegex.ReplaceAllString(logs, `"hostname":"REDACTED"`)
+		ipAddr  = "0.0.0.0"
+		ispInfo = ipv4Regex.ReplaceAllString(ispInfo, "0.0.0.0")
+		logs    = ipv4Regex.ReplaceAllString(logs, "0.0.0.0")
+		ispInfo = ipv6Regex.ReplaceAllString(ispInfo, "0.0.0.0")
+		logs    = ipv6Regex.ReplaceAllString(logs, "0.0.0.0")
+		ispInfo = hostnameRegex.ReplaceAllString(ispInfo, `"hostname":"REDACTED"`)
+		logs    = hostnameRegex.ReplaceAllString(logs, `"hostname":"REDACTED"`)
 	}
 
 	var record schema.TelemetryData
