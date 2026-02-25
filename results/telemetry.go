@@ -44,7 +44,7 @@ var fontMediumBytes []byte
 var fontLightBytes []byte
 
 var (
-	ipv4Regex     = regexp.MustCompile(`(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)`)
+	ipv4Regex     = regexp.MustCompile(`(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)`)
 	ipv6Regex     = regexp.MustCompile(`(([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:)|fe80:(:[0-9a-fA-F]{0,4}){0,4}%[0-9a-zA-Z]{1,}|::(ffff(:0{1,4})?:)?((25[0-5]|(2[0-4]|1?[0-9])?[0-9])\.){3}(25[0-5]|(2[0-4]|1?[0-9])?[0-9])|([0-9a-fA-F]{1,4}:){1,4}:((25[0-5]|(2[0-4]|1?[0-9])?[0-9])\.){3}(25[0-5]|(2[0-4]|1?[0-9])?[0-9]))`)
 	hostnameRegex = regexp.MustCompile(`"hostname":"([^\\\\"]|\\\\")*"`)
 
@@ -164,13 +164,13 @@ func Record(w http.ResponseWriter, r *http.Request) {
 	extra := r.FormValue("extra")
 
 	if config.LoadedConfig().RedactIP {
-		ipAddr = "0.0.0.0"
-		ipv4Regex.ReplaceAllString(ispInfo, "0.0.0.0")
-		ipv4Regex.ReplaceAllString(logs, "0.0.0.0")
-		ipv6Regex.ReplaceAllString(ispInfo, "0.0.0.0")
-		ipv6Regex.ReplaceAllString(logs, "0.0.0.0")
-		hostnameRegex.ReplaceAllString(ispInfo, `"hostname":"REDACTED"`)
-		hostnameRegex.ReplaceAllString(logs, `"hostname":"REDACTED"`)
+		ipAddr  = "0.0.0.0"
+		ispInfo = ipv4Regex.ReplaceAllString(ispInfo, "0.0.0.0")
+		logs    = ipv4Regex.ReplaceAllString(logs, "0.0.0.0")
+		ispInfo = ipv6Regex.ReplaceAllString(ispInfo, "::")
+		logs    = ipv6Regex.ReplaceAllString(logs, "::")
+		ispInfo = hostnameRegex.ReplaceAllString(ispInfo, `"hostname":"REDACTED"`)
+		logs    = hostnameRegex.ReplaceAllString(logs, `"hostname":"REDACTED"`)
 	}
 
 	var record schema.TelemetryData
