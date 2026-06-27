@@ -1,16 +1,765 @@
 <!DOCTYPE html>
-<html>
-
+<html lang="en">
 <head>
-    <link rel="shortcut icon" href="favicon.ico">
-    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no, user-scalable=no" />
-    <meta charset="UTF-8" />
-    <script type="text/javascript" src="design-switch.js"></script>
-    <title>LibreSpeed</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+  <link rel="shortcut icon" href="images/favicon.svg" />
+  <script src="speedtest.js"></script>
+  <link rel="stylesheet" href="styling/fonts.css" />
+  <title>LibreSpeed</title>
+  <!-- prevent flash of wrong theme -->
+  <script>(function(){var t=localStorage.getItem('ls-theme');if(t)document.documentElement.setAttribute('data-theme',t);})();</script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #07090f;
+      --panel:    #0d1120;
+      --border:   rgba(255,255,255,0.07);
+      --text:     #eef2ff;
+      --muted:    rgba(238,242,255,0.38);
+      --dim:      rgba(238,242,255,0.13);
+      --dl:       #22d3ee;
+      --ul:       #a78bfa;
+      --ping:     #34d399;
+      --jitter:   #fbbf24;
+      /* canvas gauge colors (read from JS) */
+      --c-track:    rgba(255,255,255,0.07);
+      --c-tick-maj: rgba(255,255,255,0.32);
+      --c-tick-min: rgba(255,255,255,0.10);
+      --c-tick-lbl: rgba(255,255,255,0.38);
+      --c-num:      #ffffff;
+      --c-num-0:    rgba(255,255,255,0.22);
+      /* component helpers */
+      --card-bg:  rgba(255,255,255,0.03);
+      --input-bg: rgba(255,255,255,0.05);
+      --hover-bg: rgba(255,255,255,0.06);
+      --btn-glow: rgba(34,211,238,0.28);
+      --btn-glow2:rgba(34,211,238,0.45);
+      --grad-1:   rgba(34,211,238,0.07);
+      --grad-2:   rgba(167,139,250,0.09);
+    }
+
+    /* ── light theme ── */
+    [data-theme="light"] {
+      --bg:       #e8eaf2;
+      --panel:    #f4f5fa;
+      --border:   rgba(0,0,0,0.08);
+      --text:     #0f172a;
+      --muted:    rgba(15,23,42,0.52);
+      --dim:      rgba(15,23,42,0.28);
+      --dl:       #0891b2;
+      --ul:       #7c3aed;
+      --ping:     #059669;
+      --jitter:   #b45309;
+      --c-track:    rgba(0,0,0,0.08);
+      --c-tick-maj: rgba(0,0,0,0.35);
+      --c-tick-min: rgba(0,0,0,0.12);
+      --c-tick-lbl: rgba(0,0,0,0.45);
+      --c-num:      #0f172a;
+      --c-num-0:    rgba(15,23,42,0.20);
+      --card-bg:  rgba(0,0,0,0.03);
+      --input-bg: rgba(0,0,0,0.04);
+      --hover-bg: rgba(0,0,0,0.05);
+      --btn-glow: rgba(8,145,178,0.22);
+      --btn-glow2:rgba(8,145,178,0.38);
+      --grad-1:   rgba(34,211,238,0.10);
+      --grad-2:   rgba(167,139,250,0.10);
+    }
+
+    html { background: var(--bg); min-height: 100%; overflow-x: hidden; }
+
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      color: var(--text);
+      min-height: 100vh;
+      overflow-x: hidden;
+      display: flex;
+      flex-direction: column;
+      background:
+        radial-gradient(ellipse 100% 50% at 30% -5%,  var(--grad-1) 0%, transparent 55%),
+        radial-gradient(ellipse  70% 40% at 80% 110%, var(--grad-2) 0%, transparent 50%),
+        var(--bg);
+    }
+
+    /* ── header ── */
+    header {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1.5rem 2rem;
+    }
+    header img {
+      height: 2rem;
+      opacity: 0.8;
+      transition: opacity 0.2s;
+    }
+    [data-theme="light"] header img {
+      background: rgba(7, 9, 15, 0.82);
+      padding: 0.3rem 0.7rem;
+      border-radius: 0.45rem;
+    }
+
+    /* ── main ── */
+    main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 3rem 2rem 4rem;
+      gap: 2.8rem;
+    }
+
+    /* ── gauges ── */
+    .gauges {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.8rem 2rem;
+      width: 100%;
+      max-width: 880px;
+    }
+    .gauge-wrap { display: flex; justify-content: center; }
+    .gauge-wrap canvas {
+      width: 100%;
+      max-width: 360px;
+      aspect-ratio: 1.45 / 1;
+      display: block;
+      min-width: 0;
+    }
+    .gauge-wrap.sm canvas { max-width: 280px; }
+
+    /* ── controls ── */
+    .controls {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 1rem;
+    }
+    #ip-info {
+      font-size: 1.2rem;
+      color: var(--muted);
+      min-height: 1.8rem;
+      text-align: center;
+    }
+    #ip-info strong { color: var(--text); }
+
+    #btn-start {
+      font-family: 'Inter', sans-serif;
+      font-size: 1.4rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: #07090f;
+      background: var(--dl);
+      border: none;
+      border-radius: 100px;
+      padding: 1.3rem 5.5rem;
+      cursor: pointer;
+      transition: transform 0.15s, box-shadow 0.2s, background 0.2s;
+      box-shadow: 0 0 28px var(--btn-glow), 0 2px 8px rgba(0,0,0,0.3);
+    }
+    #btn-start:hover:not(:disabled) {
+      transform: translateY(-2px) scale(1.02);
+      box-shadow: 0 0 44px var(--btn-glow2), 0 4px 16px rgba(0,0,0,0.4);
+    }
+    #btn-start:active:not(:disabled) { transform: scale(0.97); }
+    #btn-start.abort {
+      background: #f87171;
+      box-shadow: 0 0 28px rgba(248,113,113,0.35);
+    }
+    #btn-start:disabled { opacity: 0.35; cursor: default; }
+
+    /* ── results ── */
+    #results {
+      width: 100%;
+      max-width: 880px;
+      display: none;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 1.2rem;
+      animation: slide-up 0.45s cubic-bezier(0.16,1,0.3,1);
+    }
+    #results.visible { display: grid; }
+    @keyframes slide-up {
+      from { opacity: 0; transform: translateY(16px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .r-card {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.3rem;
+      padding: 1.6rem 1rem 1.4rem;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 1rem;
+    }
+    .r-val {
+      font-size: 3rem;
+      font-weight: 200;
+      letter-spacing: -0.03em;
+      font-variant-numeric: tabular-nums;
+      line-height: 1;
+    }
+    .r-label {
+      font-size: 0.95rem;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-top: 0.2rem;
+    }
+    .r-unit { font-size: 0.95rem; color: var(--dim); }
+    [data-m=dl]     .r-val { color: var(--dl); }
+    [data-m=ul]     .r-val { color: var(--ul); }
+    [data-m=ping]   .r-val { color: var(--ping); }
+    [data-m=jitter] .r-val { color: var(--jitter); }
+
+    /* ── share button ── */
+    #btn-share {
+      font-family: 'Inter', sans-serif;
+      font-size: 1.2rem;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--dl);
+      background: transparent;
+      border: 1px solid var(--dl);
+      border-radius: 100px;
+      padding: 0.8rem 2.5rem;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    #btn-share:hover { background: rgba(34,211,238,0.08); }
+
+    /* ── share dialog ── */
+    dialog {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 1.2rem;
+      color: var(--text);
+      width: min(92vw, 560px);
+      padding: 2.8rem 2.8rem 2.4rem;
+      margin: auto;
+    }
+    dialog::backdrop { background: rgba(0,0,0,0.75); backdrop-filter: blur(6px); }
+    dialog:not([open]) { display: none; }
+    dialog[open] {
+      display: flex;
+      flex-direction: column;
+      gap: 1.6rem;
+      animation: pop-in 0.22s cubic-bezier(0.16,1,0.3,1);
+    }
+    @keyframes pop-in {
+      from { opacity: 0; transform: scale(0.93); }
+      to   { opacity: 1; transform: scale(1); }
+    }
+    dialog h2 {
+      font-size: 1.8rem;
+      font-weight: 300;
+      letter-spacing: -0.02em;
+      color: var(--text);
+    }
+    .close-x {
+      position: absolute;
+      top: 1.4rem; right: 1.4rem;
+      background: none;
+      border: none;
+      color: var(--muted);
+      font-size: 1.6rem;
+      cursor: pointer;
+      line-height: 1;
+      padding: 0.4rem;
+      border-radius: 50%;
+      transition: color 0.15s, background 0.15s;
+    }
+    .close-x:hover { color: var(--text); background: var(--hover-bg); }
+    dialog img {
+      width: 100%;
+      border-radius: 0.8rem;
+      border: 1px solid var(--border);
+      display: block;
+    }
+    .share-row {
+      display: flex;
+      gap: 0.8rem;
+    }
+    .share-row input {
+      flex: 1;
+      background: var(--input-bg);
+      border: 1px solid var(--border);
+      border-radius: 0.6rem;
+      color: var(--muted);
+      font-family: 'Inter', monospace;
+      font-size: 1.1rem;
+      padding: 0.7rem 1rem;
+      outline: none;
+    }
+    .share-row button {
+      font-family: 'Inter', sans-serif;
+      font-size: 1.2rem;
+      font-weight: 600;
+      color: #07090f;
+      background: var(--dl);
+      border: none;
+      border-radius: 0.6rem;
+      padding: 0.7rem 1.6rem;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: opacity 0.15s;
+    }
+    .share-row button:hover { opacity: 0.85; }
+
+    /* ── responsive ── */
+    @media (max-width: 700px) {
+      header { padding: 1rem 1.2rem; }
+      main { padding: 1.5rem 0.8rem 2.5rem; gap: 1.8rem; }
+      .gauges {
+        gap: 0.4rem 0.6rem;
+        max-width: 100%;
+      }
+      .gauge-wrap canvas { max-width: 100%; }
+      .gauge-wrap.sm canvas { max-width: 100%; }
+      #results { grid-template-columns: repeat(2, 1fr); gap: 0.7rem; }
+      .r-card { padding: 1.2rem 0.6rem 1rem; }
+      .r-val { font-size: 2.4rem; }
+      .r-label { font-size: 0.8rem; }
+      .r-unit { font-size: 0.8rem; }
+      #btn-start { font-size: 1.2rem; padding: 1.1rem 4rem; }
+    }
+
+    @media (max-width: 420px) {
+      .gauges { gap: 0.3rem; }
+      .r-val { font-size: 2rem; }
+      #ip-info { font-size: 1rem; }
+    }
+
+    /* ── theme toggle (top-right of header) ── */
+    .theme-switch {
+      position: absolute;
+      right: 1.5rem;
+      top: 50%;
+      transform: translateY(-50%);
+      display: flex;
+      align-items: center;
+      cursor: pointer;
+      user-select: none;
+    }
+    .pill {
+      width: 2.4rem;
+      height: 1.3rem;
+      background: rgba(255,255,255,0.14);
+      border-radius: 100px;
+      position: relative;
+      transition: background 0.25s;
+    }
+    [data-theme="light"] .pill { background: var(--dl); }
+    .dot {
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 0.85rem;
+      height: 0.85rem;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.75);
+      transition: transform 0.25s cubic-bezier(0.34,1.4,0.64,1);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    }
+    [data-theme="light"] .dot {
+      transform: translateX(1.1rem);
+      background: #ffffff;
+    }
+  </style>
 </head>
-
 <body>
-    <p>Loading...</p>
-</body>
 
+<header>
+  <img src="images/logo.svg" alt="LibreSpeed" />
+  <label class="theme-switch" title="Toggle dark / light theme">
+    <input type="checkbox" id="theme-chk" hidden>
+    <span class="pill"><span class="dot"></span></span>
+  </label>
+</header>
+
+<main>
+  <div class="gauges">
+    <div class="gauge-wrap">    <canvas id="g-dl"></canvas>     </div>
+    <div class="gauge-wrap">    <canvas id="g-ul"></canvas>     </div>
+    <div class="gauge-wrap sm"> <canvas id="g-ping"></canvas>   </div>
+    <div class="gauge-wrap sm"> <canvas id="g-jitter"></canvas> </div>
+  </div>
+
+  <div class="controls">
+    <p id="ip-info"></p>
+    <button id="btn-start" disabled>Loading…</button>
+    <button id="btn-share" style="display:none">Share Results</button>
+  </div>
+
+  <div id="results">
+    <div class="r-card" data-m="dl">
+      <div class="r-val" id="r-dl">—</div>
+      <div class="r-label">Download</div>
+      <div class="r-unit">Mbps</div>
+    </div>
+    <div class="r-card" data-m="ul">
+      <div class="r-val" id="r-ul">—</div>
+      <div class="r-label">Upload</div>
+      <div class="r-unit">Mbps</div>
+    </div>
+    <div class="r-card" data-m="ping">
+      <div class="r-val" id="r-ping">—</div>
+      <div class="r-label">Ping</div>
+      <div class="r-unit">ms</div>
+    </div>
+    <div class="r-card" data-m="jitter">
+      <div class="r-val" id="r-jitter">—</div>
+      <div class="r-label">Jitter</div>
+      <div class="r-unit">ms</div>
+    </div>
+  </div>
+</main>
+
+<dialog id="share-dialog">
+  <button id="btn-close-share" class="close-x" title="Close">&#x2715;</button>
+  <h2>Share your results</h2>
+  <img id="share-img" src="" alt="Speed test results" />
+  <div class="share-row">
+    <input id="share-link" type="text" readonly />
+    <button id="btn-copy">Copy link</button>
+  </div>
+</dialog>
+
+<script>
+// ── Gauge geometry (240° arc, open at bottom) ─────────────────────────────
+// Clockwise from lower-left (150°) to lower-right (30°), passing over the top
+const G_START = (5 * Math.PI) / 6;
+const G_SWEEP = (4 * Math.PI) / 3;
+
+const GAUGES = {
+  dl:     { el: null, color: '#22d3ee', cssVar: '--dl', label: 'DOWNLOAD', unit: 'Mbps', isLog: true,  max: 10000 },
+  ul:     { el: null, color: '#a78bfa', cssVar: '--ul', label: 'UPLOAD',   unit: 'Mbps', isLog: true,  max: 10000 },
+  ping:   { el: null, color: '#34d399', cssVar: '--ping', label: 'PING',   unit: 'ms',   isLog: false, max: 500   },
+  jitter: { el: null, color: '#fbbf24', cssVar: '--jitter', label: 'JITTER', unit: 'ms', isLog: false, max: 150   },
+};
+
+// Tick definitions — log scale 1–10000 Mbps
+// Each decade (1-10, 10-100, 100-1G, 1G-10G) spans ~60° on the arc.
+// Labels at key reference points including 2.5G and 5G for multi-gig connections.
+function logTicks() {
+  const major = [
+    { v: 1,     label: '1'    },
+    { v: 5,     label: '5'    },
+    { v: 10,    label: '10'   },
+    { v: 50,    label: '50'   },
+    { v: 100,   label: '100'  },
+    { v: 500,   label: '500'  },
+    { v: 1000,  label: '1G'   },
+    { v: 2500,  label: '2.5G' },
+    { v: 5000,  label: '5G'   },
+    { v: 10000, label: '10G'  },
+  ];
+  const minor = [
+    2,3,4, 6,7,8,9,
+    20,30,40, 60,70,80,90,
+    200,300,400, 600,700,800,900,
+    1500,2000,3000,4000,6000,7000,7500,8000,9000,
+  ];
+  return [
+    ...major.map(m => ({ ...m, major: true  })),
+    ...minor.map(v => ({ v,    major: false })),
+  ];
+}
+function linTicks(vals, majors) {
+  return vals.map(v => ({ v, major: majors.includes(v), label: majors.includes(v) ? ''+v : '' }));
+}
+GAUGES.dl.ticks     = logTicks();
+GAUGES.ul.ticks     = logTicks();
+GAUGES.ping.ticks   = linTicks([0,50,100,150,200,250,300,400,500], [0,100,200,300,500]);
+GAUGES.jitter.ticks = linTicks([0,25,50,75,100,125,150],           [0,50,100,150]);
+
+function valToAngle(v, max, isLog) {
+  let r = isLog
+    ? Math.log10(Math.max(0.001, v) + 1) / Math.log10(max + 1)
+    : v / max;
+  return G_START + Math.max(0, Math.min(1, r)) * G_SWEEP;
+}
+
+function fmt(v) {
+  v = Number(v);
+  if (!v || isNaN(v)) return '–';
+  if (v < 10)  return v.toFixed(2);
+  if (v < 100) return v.toFixed(1);
+  return v.toFixed(0);
+}
+
+// Like fmt but treats 0 as a real value (e.g. jitter=0 on LAN is valid, not missing)
+function fmtResult(v) {
+  v = Number(v);
+  if (isNaN(v)) return '–';
+  if (v < 10)  return v.toFixed(2);
+  if (v < 100) return v.toFixed(1);
+  return v.toFixed(0);
+}
+
+function draw(g, value, progress, active, dimmed) {
+  const canvas = g.el;
+  const ctx = canvas.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  const W = canvas.clientWidth * dpr;
+  const H = canvas.clientHeight * dpr;
+  if (!W || !H) return;
+  if (canvas.width !== W || canvas.height !== H) { canvas.width = W; canvas.height = H; }
+  ctx.clearRect(0, 0, W, H);
+
+  // read accent color from CSS vars (changes between themes)
+  // neutral canvas colors use isLight directly — CSS-var reading is unreliable on canvas
+  const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+  const gColor  = getComputedStyle(document.documentElement).getPropertyValue(g.cssVar).trim() || g.color;
+  const cTrack  = isLight ? 'rgba(0,0,0,0.08)'       : 'rgba(255,255,255,0.07)';
+  const cTkMaj  = isLight ? 'rgba(0,0,0,0.35)'       : 'rgba(255,255,255,0.32)';
+  const cTkMin  = isLight ? 'rgba(0,0,0,0.12)'       : 'rgba(255,255,255,0.10)';
+  const cTkLbl  = isLight ? 'rgba(0,0,0,0.45)'       : 'rgba(255,255,255,0.38)';
+  const cNum    = isLight ? '#0f172a'  : '#ffffff';
+  const cNum0   = isLight ? '#0f172a'  : '#ffffff'; // solid; globalAlpha handles the fade
+
+  const cx = W / 2;
+  const R  = Math.min(W * 0.36, H * 0.55);
+  const cy = R + H * 0.08;
+  const tw = R * 0.09;
+  const a  = dimmed ? 0.3 : 1;
+
+  // background track
+  ctx.save();
+  ctx.globalAlpha = a;
+  ctx.beginPath();
+  ctx.arc(cx, cy, R, G_START, G_START + G_SWEEP, false);
+  ctx.strokeStyle = cTrack;
+  ctx.lineWidth = tw;
+  ctx.lineCap = 'round';
+  ctx.stroke();
+
+  // ticks
+  g.ticks.forEach(({ v, label, major }) => {
+    const ang = valToAngle(v, g.max, g.isLog);
+    const cos = Math.cos(ang), sin = Math.sin(ang);
+    ctx.beginPath();
+    ctx.moveTo(cx + (R + tw*0.15)*cos, cy + (R + tw*0.15)*sin);
+    ctx.lineTo(cx + (major ? R-tw*0.9 : R-tw*0.45)*cos, cy + (major ? R-tw*0.9 : R-tw*0.45)*sin);
+    ctx.strokeStyle = major ? cTkMaj : cTkMin;
+    ctx.lineWidth = major ? 1.5*dpr : 0.8*dpr;
+    ctx.lineCap = 'butt';
+    ctx.stroke();
+    if (label && major) {
+      const lr = R - tw*1.75;
+      ctx.font = `${Math.round(9.5*dpr)}px Inter,sans-serif`;
+      ctx.fillStyle = cTkLbl;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(label, cx + lr*cos, cy + lr*sin);
+    }
+  });
+  ctx.restore();
+
+  // value arc + glow
+  if (value > 0) {
+    const va = valToAngle(value, g.max, g.isLog);
+
+    if (active) {
+      ctx.save();
+      ctx.globalAlpha = 0.4;
+      ctx.beginPath();
+      ctx.arc(cx, cy, R, G_START, va, false);
+      ctx.strokeStyle = gColor;
+      ctx.lineWidth = tw * 2.8;
+      ctx.lineCap = 'round';
+      ctx.filter = `blur(${Math.round(tw*0.7)}px)`;
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    ctx.save();
+    ctx.globalAlpha = a;
+    ctx.beginPath();
+    ctx.arc(cx, cy, R, G_START, va, false);
+    ctx.strokeStyle = gColor;
+    ctx.lineWidth = tw;
+    ctx.lineCap = 'round';
+    if (active) { ctx.shadowColor = gColor; ctx.shadowBlur = 10*dpr; }
+    ctx.stroke();
+    ctx.restore();
+
+    // tip dot
+    ctx.save();
+    ctx.globalAlpha = a;
+    ctx.beginPath();
+    ctx.arc(cx + R*Math.cos(va), cy + R*Math.sin(va), tw*0.62, 0, 2*Math.PI);
+    ctx.fillStyle = cNum;
+    ctx.shadowColor = gColor;
+    ctx.shadowBlur = active ? 14*dpr : 6*dpr;
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // progress ring — stays visible while active even after progress hits 1.0,
+  // because the test worker can report 100% a few seconds before testState changes
+  if (active && progress > 0) {
+    const ringEnd = G_START + Math.min(progress, 1) * G_SWEEP;
+    ctx.save();
+    ctx.globalAlpha = 0.45;
+    ctx.beginPath();
+    ctx.arc(cx, cy, R + tw*1.05, G_START, ringEnd, false);
+    ctx.strokeStyle = gColor;
+    ctx.lineWidth = 2*dpr;
+    ctx.lineCap = 'round';
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // text
+  const numY  = cy + R * 0.28;
+  const numSz = Math.round(R * 0.38);
+  const uSz   = Math.round(R * 0.13);
+  const lSz   = Math.round(R * 0.105);
+
+  ctx.save();
+  ctx.globalAlpha = dimmed ? 0.2 : (value > 0 ? 1 : 0.18);
+  ctx.font = `200 ${numSz}px Inter,sans-serif`;
+  ctx.fillStyle = value > 0 ? cNum : cNum0;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'alphabetic';
+  ctx.fillText(value > 0 ? fmt(value) : '–', cx, numY);
+  ctx.restore();
+
+  ctx.save();
+  ctx.globalAlpha = dimmed ? 0.18 : 0.72;
+  ctx.font = `500 ${uSz}px Inter,sans-serif`;
+  ctx.fillStyle = gColor;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  ctx.fillText(g.unit, cx, numY + uSz*0.3);
+  ctx.restore();
+
+  ctx.save();
+  ctx.globalAlpha = dimmed ? 0.18 : 0.42;
+  ctx.font = `700 ${lSz}px Inter,sans-serif`;
+  ctx.fillStyle = cNum;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  ctx.fillText(g.label, cx, numY + uSz*0.3 + uSz*1.5);
+  ctx.restore();
+}
+
+// ── App ──────────────────────────────────────────────────────────────────────
+let state  = 'idle';
+let data   = null;
+let testId = null;
+let sp     = null;
+
+window.addEventListener('DOMContentLoaded', () => {
+  GAUGES.dl.el     = document.getElementById('g-dl');
+  GAUGES.ul.el     = document.getElementById('g-ul');
+  GAUGES.ping.el   = document.getElementById('g-ping');
+  GAUGES.jitter.el = document.getElementById('g-jitter');
+
+  // ── theme toggle ────────────────────────────────────────────────────────────
+  const themeChk = document.getElementById('theme-chk');
+  themeChk.checked = document.documentElement.getAttribute('data-theme') === 'light';
+  themeChk.addEventListener('change', () => {
+    const next = themeChk.checked ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', next);
+    localStorage.setItem('ls-theme', next);
+  });
+
+  Object.values(GAUGES).forEach(g => draw(g, 0, 0, false, false));
+
+  sp = new Speedtest();
+  sp.setParameter('telemetry_level', 'basic');
+  sp.onupdate = d => { data = d; };
+  sp.onend    = () => { state = 'done'; };
+
+  const btn     = document.getElementById('btn-start');
+  const btnShare = document.getElementById('btn-share');
+  btn.disabled  = false;
+  btn.textContent = 'Start Test';
+
+  btn.addEventListener('click', () => {
+    if (state === 'running') { sp.abort(); return; }
+    data   = null;
+    testId = null;
+    state  = 'running';
+    document.getElementById('results').classList.remove('visible');
+    document.getElementById('ip-info').innerHTML = '';
+    btnShare.style.display = 'none';
+    btn.textContent = 'Abort';
+    btn.classList.add('abort');
+    Object.values(GAUGES).forEach(g => draw(g, 0, 0, false, false));
+    sp.start();
+  });
+
+  // share button → open dialog
+  btnShare.addEventListener('click', () => {
+    if (!testId) return;
+    const url = location.origin + location.pathname.replace(/[^/]*$/, '') + 'results/?id=' + testId;
+    document.getElementById('share-img').src   = url;
+    document.getElementById('share-link').value = url;
+    document.getElementById('share-dialog').showModal();
+  });
+
+  // copy link
+  document.getElementById('btn-copy').addEventListener('click', async () => {
+    const link = document.getElementById('share-link').value;
+    try {
+      await navigator.clipboard.writeText(link);
+    } catch (_) {
+      document.getElementById('share-link').select();
+      document.execCommand('copy');
+    }
+    const btn = document.getElementById('btn-copy');
+    const orig = btn.textContent;
+    btn.textContent = 'Copied!';
+    setTimeout(() => btn.textContent = orig, 2500);
+  });
+
+  document.getElementById('btn-close-share').addEventListener('click', () =>
+    document.getElementById('share-dialog').close()
+  );
+
+  // render loop
+  (function loop() {
+    requestAnimationFrame(loop);
+    if (!data) return;
+
+    const d       = data;
+    const ts      = d.testState;
+    const running = state === 'running';
+    const done    = state === 'done';
+
+    const oscDl = (running && ts === 1) ? 1 + 0.015 * Math.sin(Date.now() / 120) : 1;
+    const oscUl = (running && ts === 3) ? 1 + 0.015 * Math.sin(Date.now() / 120) : 1;
+
+    draw(GAUGES.dl,     (parseFloat(d.dlStatus)    ||0)*oscDl, parseFloat(d.dlProgress)  ||0, ts===1, running && ts!==1);
+    draw(GAUGES.ul,     (parseFloat(d.ulStatus)    ||0)*oscUl, parseFloat(d.ulProgress)  ||0, ts===3, running && ts!==3);
+    draw(GAUGES.ping,   (parseFloat(d.pingStatus)  ||0),       parseFloat(d.pingProgress)||0, ts===2, running && ts!==2);
+    draw(GAUGES.jitter, (parseFloat(d.jitterStatus)||0),       0,                             ts===2, running && ts!==2);
+
+    if (d.clientIp)
+      document.getElementById('ip-info').innerHTML = `Connected via <strong>${d.clientIp}</strong>`;
+
+    if (done) {
+      document.getElementById('r-dl').textContent     = fmtResult(d.dlStatus);
+      document.getElementById('r-ul').textContent     = fmtResult(d.ulStatus);
+      document.getElementById('r-ping').textContent   = fmtResult(d.pingStatus);
+      document.getElementById('r-jitter').textContent = fmtResult(d.jitterStatus);
+      document.getElementById('results').classList.add('visible');
+      btn.textContent = 'Test Again';
+      btn.classList.remove('abort');
+      if (d.testId) {
+        testId = d.testId;
+        btnShare.style.display = '';
+      }
+    }
+  })();
+});
+</script>
+</body>
 </html>
