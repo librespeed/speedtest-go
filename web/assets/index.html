@@ -564,7 +564,7 @@ function draw(g, value, progress, active, dimmed) {
   if (value > 0) {
     const va = valToAngle(value, g.max, g.isLog);
 
-    if (active) {
+    if (active && !isLight) {
       ctx.save();
       ctx.globalAlpha = 0.4;
       ctx.beginPath();
@@ -584,7 +584,7 @@ function draw(g, value, progress, active, dimmed) {
     ctx.strokeStyle = gColor;
     ctx.lineWidth = tw;
     ctx.lineCap = 'round';
-    if (active) { ctx.shadowColor = gColor; ctx.shadowBlur = 10*dpr; }
+    if (active && !isLight) { ctx.shadowColor = gColor; ctx.shadowBlur = 10*dpr; }
     ctx.stroke();
     ctx.restore();
 
@@ -594,8 +594,7 @@ function draw(g, value, progress, active, dimmed) {
     ctx.beginPath();
     ctx.arc(cx + R*Math.cos(va), cy + R*Math.sin(va), tw*0.62, 0, 2*Math.PI);
     ctx.fillStyle = cNum;
-    ctx.shadowColor = gColor;
-    ctx.shadowBlur = active ? 14*dpr : 6*dpr;
+    if (!isLight) { ctx.shadowColor = gColor; ctx.shadowBlur = active ? 14*dpr : 6*dpr; }
     ctx.fill();
     ctx.restore();
   }
@@ -622,7 +621,7 @@ function draw(g, value, progress, active, dimmed) {
   const lSz   = Math.round(R * 0.105);
 
   ctx.save();
-  ctx.globalAlpha = dimmed ? 0.2 : (value > 0 ? 1 : 0.18);
+  ctx.globalAlpha = dimmed ? 0.2 : (value > 0 ? 1 : (isLight ? 0.38 : 0.18));
   ctx.font = `200 ${numSz}px Inter,sans-serif`;
   ctx.fillStyle = value > 0 ? cNum : cNum0;
   ctx.textAlign = 'center';
@@ -631,7 +630,7 @@ function draw(g, value, progress, active, dimmed) {
   ctx.restore();
 
   ctx.save();
-  ctx.globalAlpha = dimmed ? 0.18 : 0.72;
+  ctx.globalAlpha = dimmed ? 0.18 : (isLight ? 0.9 : 0.72);
   ctx.font = `500 ${uSz}px Inter,sans-serif`;
   ctx.fillStyle = gColor;
   ctx.textAlign = 'center';
@@ -640,7 +639,7 @@ function draw(g, value, progress, active, dimmed) {
   ctx.restore();
 
   ctx.save();
-  ctx.globalAlpha = dimmed ? 0.18 : 0.42;
+  ctx.globalAlpha = dimmed ? 0.18 : (isLight ? 0.65 : 0.42);
   ctx.font = `700 ${lSz}px Inter,sans-serif`;
   ctx.fillStyle = cNum;
   ctx.textAlign = 'center';
@@ -668,6 +667,8 @@ window.addEventListener('DOMContentLoaded', () => {
     const next = themeChk.checked ? 'light' : 'dark';
     document.documentElement.setAttribute('data-theme', next);
     localStorage.setItem('ls-theme', next);
+    // redraw gauges immediately so canvas doesn't keep stale dark-mode colors
+    if (state !== 'running') Object.values(GAUGES).forEach(g => draw(g, 0, 0, false, false));
   });
 
   Object.values(GAUGES).forEach(g => draw(g, 0, 0, false, false));
