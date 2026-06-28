@@ -557,18 +557,20 @@ const statsTemplate = `<!DOCTYPE html>
 		}
 
 		.logout-btn {
-			padding: 0.8rem 1.5rem;
-			background: rgba(255, 255, 255, 0.2);
-			color: white;
-			border: none;
-			border-radius: 8px;
+			padding: 0.5rem 1.2rem;
+			background: transparent;
+			color: rgba(255, 255, 255, 0.85);
+			border: 1px solid rgba(255, 255, 255, 0.5);
+			border-radius: 6px;
 			cursor: pointer;
-			font-size: 1rem;
-			transition: background 0.3s;
+			font-size: 0.9rem;
+			transition: background 0.2s, border-color 0.2s, color 0.2s;
 		}
 
 		.logout-btn:hover {
-			background: rgba(255, 255, 255, 0.3);
+			background: rgba(255, 255, 255, 0.15);
+			border-color: rgba(255, 255, 255, 0.85);
+			color: white;
 		}
 
 		.results-grid {
