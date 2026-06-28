@@ -79,3 +79,35 @@ func (p *MSSQL) FetchLast100() ([]schema.TelemetryData, error) {
 	}
 	return records, nil
 }
+
+func (p *MSSQL) FetchAll(offset, limit int) ([]schema.TelemetryData, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+	var records []schema.TelemetryData
+	rows, err := p.db.Query(`SELECT * FROM speedtest_users ORDER BY timestamp DESC OFFSET @p1 ROWS FETCH NEXT @p2 ROWS ONLY;`, offset, limit)
+	if err != nil {
+		return nil, fmt.Errorf("mssql fetch all: %w", err)
+	}
+	if rows != nil {
+		defer rows.Close()
+		for rows.Next() {
+			var record schema.TelemetryData
+			var id int64
+			if err := rows.Scan(&id, &record.Timestamp, &record.IPAddress, &record.ISPInfo, &record.Extra, &record.UserAgent, &record.Language, &record.Download, &record.Upload, &record.Ping, &record.Jitter, &record.Log, &record.UUID); err != nil {
+				return nil, fmt.Errorf("mssql scan row: %w", err)
+			}
+			records = append(records, record)
+		}
+	}
+	return records, nil
+}
+
+func (p *MSSQL) Count() (int, error) {
+	var count int
+	err := p.db.QueryRow(`SELECT COUNT(*) FROM speedtest_users;`).Scan(&count)
+	if err != nil {
+		return 0, fmt.Errorf("mssql count: %w", err)
+	}
+	return count, nil
+}

@@ -3,6 +3,7 @@ package web
 import (
 	"embed"
 	"encoding/json"
+	"errors"
 	"io"
 	"io/fs"
 	"io/ioutil"
@@ -11,6 +12,8 @@ import (
 	"os"
 	"regexp"
 	"strconv"
+	"strings"
+	"syscall"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -187,10 +190,33 @@ func garbage(w http.ResponseWriter, r *http.Request) {
 
 	for i := 0; i < chunks; i++ {
 		if _, err := w.Write(randomData); err != nil {
-			log.Errorf("Error writing back to client at chunk number %d: %s", i, err)
+			// Client disconnects are expected during a speed test: the browser
+			// aborts its download streams when the timed test ends. Don't spam
+			// the log for those — only surface genuinely unexpected errors.
+			if !isClientGone(err) {
+				log.Errorf("Error writing back to client at chunk number %d: %s", i, err)
+			}
 			break
 		}
 	}
+}
+
+// isClientGone reports whether err is a normal client-side disconnect (the peer
+// closed the connection / aborted the HTTP2 stream), which happens routinely
+// when a speed test finishes and is not a server error.
+func isClientGone(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, syscall.EPIPE) || errors.Is(err, syscall.ECONNRESET) {
+		return true
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "stream closed") ||
+		strings.Contains(msg, "broken pipe") ||
+		strings.Contains(msg, "connection reset by peer") ||
+		strings.Contains(msg, "client disconnected") ||
+		strings.Contains(msg, "context canceled")
 }
 
 func getIP(w http.ResponseWriter, r *http.Request) {
@@ -209,7 +235,9 @@ func getIP(w http.ResponseWriter, r *http.Request) {
 		ret.ProcessedString = clientIP + " - " + desc
 		b, _ := json.Marshal(&ret)
 		if _, err := w.Write(b); err != nil {
-			log.Errorf("Error writing to client: %s", err)
+			if !isClientGone(err) {
+				log.Errorf("Error writing to client: %s", err)
+			}
 		}
 		return
 	}

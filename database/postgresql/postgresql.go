@@ -64,3 +64,32 @@ func (p *PostgreSQL) FetchLast100() ([]schema.TelemetryData, error) {
 	}
 	return records, nil
 }
+
+func (p *PostgreSQL) FetchAll(offset, limit int) ([]schema.TelemetryData, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+	var records []schema.TelemetryData
+	rows, err := p.db.Query(`SELECT * FROM speedtest_users ORDER BY "timestamp" DESC OFFSET $1 LIMIT $2;`, offset, limit)
+	if err != nil {
+		return nil, err
+	}
+	if rows != nil {
+		defer rows.Close()
+		var id string
+		for rows.Next() {
+			var record schema.TelemetryData
+			if err := rows.Scan(&id, &record.Timestamp, &record.IPAddress, &record.ISPInfo, &record.Extra, &record.UserAgent, &record.Language, &record.Download, &record.Upload, &record.Ping, &record.Jitter, &record.Log, &record.UUID); err != nil {
+				return nil, err
+			}
+			records = append(records, record)
+		}
+	}
+	return records, nil
+}
+
+func (p *PostgreSQL) Count() (int, error) {
+	var count int
+	err := p.db.QueryRow(`SELECT COUNT(*) FROM speedtest_users;`).Scan(&count)
+	return count, err
+}

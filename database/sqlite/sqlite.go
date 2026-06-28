@@ -93,3 +93,35 @@ func (p *SQLite) FetchLast100() ([]schema.TelemetryData, error) {
 	}
 	return records, nil
 }
+
+func (p *SQLite) FetchAll(offset, limit int) ([]schema.TelemetryData, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+	var records []schema.TelemetryData
+	rows, err := p.db.Query(`SELECT * FROM speedtest_users ORDER BY timestamp DESC LIMIT ? OFFSET ?;`, limit, offset)
+	if err != nil {
+		return nil, fmt.Errorf("sqlite fetch all: %w", err)
+	}
+	if rows != nil {
+		defer rows.Close()
+		for rows.Next() {
+			var record schema.TelemetryData
+			var id int
+			if err := rows.Scan(&id, &record.Timestamp, &record.IPAddress, &record.ISPInfo, &record.Extra, &record.UserAgent, &record.Language, &record.Download, &record.Upload, &record.Ping, &record.Jitter, &record.Log, &record.UUID); err != nil {
+				return nil, fmt.Errorf("sqlite scan row: %w", err)
+			}
+			records = append(records, record)
+		}
+	}
+	return records, nil
+}
+
+func (p *SQLite) Count() (int, error) {
+	var count int
+	err := p.db.QueryRow(`SELECT COUNT(*) FROM speedtest_users;`).Scan(&count)
+	if err != nil {
+		return 0, fmt.Errorf("sqlite count: %w", err)
+	}
+	return count, nil
+}
