@@ -100,8 +100,40 @@ func ListenAndServe(conf *config.Config) error {
 	r.Get(conf.BaseURL+"/backend/results/json.php", results.JSONResult)
 
 	go listenProxyProtocol(conf, r)
+	go listenRedirect(conf)
 
 	return startListener(conf, r)
+}
+
+func listenRedirect(conf *config.Config) {
+	if conf.RedirectPort == "" || conf.RedirectPort == "0" {
+		return
+	}
+	scheme := "http"
+	if conf.EnableTLS {
+		scheme = "https"
+	}
+	addr := net.JoinHostPort(conf.BindAddress, conf.RedirectPort)
+	log.Infof("Starting HTTP→%s redirect listener on %s", strings.ToUpper(scheme), addr)
+	targetPort := conf.Port
+	standardPort := map[string]string{"http": "80", "https": "443"}
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		host := r.Host
+		// Strip any port from the incoming Host header
+		if h, _, err := net.SplitHostPort(host); err == nil {
+			host = h
+		}
+		// Only append port when it's non-standard for the target scheme
+		if targetPort != "" && targetPort != standardPort[scheme] {
+			host = net.JoinHostPort(host, targetPort)
+		}
+		url := scheme + "://" + host + r.RequestURI
+		http.Redirect(w, r, url, http.StatusMovedPermanently)
+	})
+
+	if err := http.ListenAndServe(addr, handler); err != nil {
+		log.Errorf("HTTP redirect listener error: %s", err)
+	}
 }
 
 func listenProxyProtocol(conf *config.Config, r *chi.Mux) {
