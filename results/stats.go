@@ -1,7 +1,6 @@
 package results
 
 import (
-	"fmt"
 	"html/template"
 	"net/http"
 
@@ -16,10 +15,11 @@ import (
 )
 
 type StatsData struct {
-	NoPassword   bool
-	LoggedIn     bool
-	Data         []schema.TelemetryData
-	ConfigDebug  map[string]interface{}
+	NoPassword    bool
+	LoggedIn      bool
+	Data          []schema.TelemetryData
+	UniqueDevices int
+	UniqueIPs     map[string]bool
 }
 
 var (
@@ -96,6 +96,19 @@ func Stats(w http.ResponseWriter, r *http.Request) {
 					}
 					data.Data = append(data.Data, *stat)
 				}
+
+				// count unique devices (by ClientID) in the loaded result set
+				seen := map[string]bool{}
+				data.UniqueIPs = map[string]bool{}
+				for _, d := range data.Data {
+					if d.ClientID != "" {
+						seen[d.ClientID] = true
+					}
+					if d.IPAddress != "" {
+						data.UniqueIPs[d.IPAddress] = true
+					}
+				}
+				data.UniqueDevices = len(seen)
 			}
 		} else {
 			if op == "login" {
@@ -385,6 +398,34 @@ const statsTemplate = `<!DOCTYPE html>
 			color: #666;
 		}
 
+		.details .device-id {
+			font-family: monospace;
+			font-size: 0.75rem;
+			color: #888;
+			margin-top: 0.3rem;
+			word-break: break-all;
+		}
+
+		.stats-summary {
+			margin-top: 0.8rem;
+			display: flex;
+			gap: 0.5rem;
+			flex-wrap: wrap;
+		}
+
+		.badge {
+			background: rgba(255, 255, 255, 0.15);
+			color: white;
+			padding: 0.3rem 0.8rem;
+			border-radius: 999px;
+			font-size: 0.8rem;
+			font-weight: 500;
+		}
+
+		.badge-device {
+			background: rgba(34, 211, 238, 0.25);
+		}
+
 		.no-password {
 			background: white;
 			border-radius: 16px;
@@ -419,19 +460,19 @@ const statsTemplate = `<!DOCTYPE html>
 			<div class="no-password">
 				<h2>Statistics Disabled</h2>
 				<p>Please set statistics_password in settings.toml to enable access.</p>
-
-				<div style="margin-top: 2rem; padding: 1rem; background: rgba(255,0,0,0.1); border: 1px solid rgba(255,0,0,0.3); border-radius: 8px;">
-					<h3 style="color: #ff6b6b; margin-bottom: 1rem;">DEBUG INFO</h3>
-					{{ range $key, $value := .ConfigDebug }}
-						<p style="margin: 0.5rem 0; color: #e0e0e0;"><strong>{{ $key }}:</strong> {{ $value }}</p>
-					{{ end }}
-				</div>
 			</div>
 		{{ else if .LoggedIn }}
 			<div class="header">
 				<div>
 					<h1>🚀 Speed Test Admin</h1>
 					<p class="subtitle">View and manage test results</p>
+					{{ if .Data }}
+					<div class="stats-summary">
+						<span class="badge">{{ len .Data }} tests</span>
+						{{ if gt .UniqueDevices 0 }}<span class="badge badge-device">🖥 {{ .UniqueDevices }} unique device{{ if gt .UniqueDevices 1 }}s{{ end }}</span>{{ end }}
+						<span class="badge">{{ len .UniqueIPs }} unique IP{{ if gt (len .UniqueIPs) 1 }}s{{ end }}</span>
+					</div>
+					{{ end }}
 				</div>
 				<form action="stats" method="GET">
 					<input type="hidden" name="op" value="logout" />
@@ -481,6 +522,7 @@ const statsTemplate = `<!DOCTYPE html>
 
 					<div class="details">
 						<p><strong>IP:</strong> {{ $v.IPAddress }}</p>
+						{{ if $v.ClientID }}<p class="device-id" title="Stable device identifier (survives IP change)"><strong>Device:</strong> {{ $v.ClientID }}</p>{{ end }}
 					</div>
 				</div>
 				{{ end }}
