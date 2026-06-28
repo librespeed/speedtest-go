@@ -69,6 +69,8 @@ var (
 	colorUpload   = color.RGBA{167, 139, 250, 255}
 	colorPing     = color.RGBA{52, 211, 153, 255}
 	colorJitter   = color.RGBA{251, 191, 36, 255}
+	colorLossWarn = color.RGBA{251, 191, 36, 255}  // same as jitter: yellow for 0<loss<2%
+	colorLossBad  = color.RGBA{248, 113, 113, 255} // #f87171: red for loss>=2%
 )
 
 type Result struct {
@@ -212,6 +214,7 @@ func Record(w http.ResponseWriter, r *http.Request) {
 	record.Ping = ping
 	record.Jitter = jitter
 	record.Log = logs
+	record.ClientID = r.FormValue("client_id")
 
 	t := time.Now()
 	entropy := ulid.Monotonic(rand.New(rand.NewSource(t.UnixNano())), 0)
@@ -307,51 +310,66 @@ func DrawPNG(w http.ResponseWriter, r *http.Request) {
 	draw.Draw(canvas, canvas.Bounds(), image.NewUniform(colorBg), image.Point{}, draw.Src)
 	drawer := &font.Drawer{Dst: canvas}
 
-	// Layout — mirrors HTML .r-card grid (gap: 1.2rem → ~24px at our scale)
+	// Layout — mirrors HTML .r-card grid
 	const (
 		sidePad = 20
-		gapW    = 24
 		barH    = 28
 		radius  = 14 // matches CSS border-radius: 1rem
 	)
 
-	colW    := (canvasWidth - sidePad*2 - gapW*3) / 4 // 197 at 900px
+	// Determine layout: 5 cards when loss param is present, 4 otherwise
+	lossParam := strings.TrimSpace(r.FormValue("loss"))
+	numCards  := 4
+	gapW      := 24
+	if lossParam != "" {
+		numCards = 5
+		gapW     = 10 // tighter gap to keep 900px canvas with 5 cards
+	}
+
+	colW    := (canvasWidth - sidePad*2 - gapW*(numCards-1)) / numCards
 	barY    := canvasHeight - barH
 	cardTop := sidePad
-	cardH   := barY - cardTop // 192
+	cardH   := barY - cardTop
 
-	// Center content block (88px) in card (192px) → 52px padding top and bottom
+	// Center content block (88px) in card
 	blockTop := cardTop + (cardH-88)/2
-	valueY   := blockTop + 45  // value baseline (~45px cap height at 30pt/150dpi)
-	labelY   := valueY + 21    // 10px gap + 11px cap height
-	unitY    := labelY + 19    // 6px gap + 13px cap height
+	valueY   := blockTop + 45
+	labelY   := valueY + 21
+	unitY    := labelY + 19
 
-	metrics := []struct {
+	// Determine packet-loss color from value
+	lossColor := colorPing // green: 0%
+	if lossParam != "" {
+		lf, _ := strconv.ParseFloat(lossParam, 64)
+		if lf > 0 && lf < 2 { lossColor = colorLossWarn }
+		if lf >= 2           { lossColor = colorLossBad  }
+	}
+
+	type metric struct {
 		label, value, unit string
 		col                color.RGBA
-	}{
+	}
+	metrics := []metric{
 		{"DOWNLOAD", formatSpeed(record.Download),   "Mbps", colorDownload},
 		{"UPLOAD",   formatSpeed(record.Upload),     "Mbps", colorUpload},
 		{"PING",     formatLatency(record.Ping),     "ms",   colorPing},
 		{"JITTER",   formatLatency(record.Jitter),   "ms",   colorJitter},
 	}
+	if lossParam != "" {
+		metrics = append(metrics, metric{"LOSS", formatLoss(lossParam), "%", lossColor})
+	}
 
 	for i, m := range metrics {
 		x := sidePad + i*(colW+gapW)
 
-		// border: slightly larger rounded rect behind the card
+		// border + card background — matches HTML .r-card
 		fillRoundedRect(canvas, x-1, cardTop-1, colW+2, cardH+2, radius+1, colorBorder)
-		// card background with rounded corners — matches HTML .r-card
 		fillRoundedRect(canvas, x, cardTop, colW, cardH, radius, colorCard)
 
 		cx := x + colW/2
-
-		// value: large, accent color — matches HTML [data-m=X] .r-val { color: var(--X) }
-		drawText(drawer, m.value, cx, valueY, image.NewUniform(m.col), valueFace)
-		// label: small, muted — matches HTML .r-label
-		drawText(drawer, m.label, cx, labelY, image.NewUniform(colorMuted), labelFace)
-		// unit: tiny, dim — matches HTML .r-unit
-		drawText(drawer, m.unit, cx, unitY, image.NewUniform(colorDim), unitFace)
+		drawText(drawer, m.value, cx, valueY, image.NewUniform(m.col),      valueFace)
+		drawText(drawer, m.label, cx, labelY, image.NewUniform(colorMuted),  labelFace)
+		drawText(drawer, m.unit,  cx, unitY,  image.NewUniform(colorDim),   unitFace)
 	}
 
 	// thin footer bar
@@ -395,6 +413,17 @@ func formatSpeed(s string) string {
 		return fmt.Sprintf("%.1f", f)
 	}
 	return fmt.Sprintf("%.2f", f)
+}
+
+func formatLoss(s string) string {
+	f, _ := strconv.ParseFloat(strings.TrimSpace(s), 64)
+	if f == 0 {
+		return "0.0"
+	}
+	if f < 10 {
+		return fmt.Sprintf("%.1f", f)
+	}
+	return fmt.Sprintf("%.0f", f)
 }
 
 func formatLatency(s string) string {

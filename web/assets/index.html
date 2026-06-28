@@ -175,7 +175,7 @@
       width: 100%;
       max-width: 880px;
       display: none;
-      grid-template-columns: repeat(4, 1fr);
+      grid-template-columns: repeat(5, 1fr);
       gap: 1.2rem;
       animation: slide-up 0.45s cubic-bezier(0.16,1,0.3,1);
     }
@@ -214,6 +214,7 @@
     [data-m=ul]     .r-val { color: var(--ul); }
     [data-m=ping]   .r-val { color: var(--ping); }
     [data-m=jitter] .r-val { color: var(--jitter); }
+    /* loss: color set dynamically by JS based on value */
 
     /* ── share button ── */
     #btn-share {
@@ -321,6 +322,7 @@
       .gauge-wrap canvas { max-width: 100%; }
       .gauge-wrap.sm canvas { max-width: 100%; }
       #results { grid-template-columns: repeat(2, 1fr); gap: 0.7rem; }
+      #results [data-m=loss] { grid-column: 1 / -1; }
       .r-card { padding: 1.2rem 0.6rem 1rem; }
       .r-val { font-size: 2.4rem; }
       .r-label { font-size: 0.8rem; }
@@ -332,6 +334,209 @@
       .gauges { gap: 0.3rem; }
       .r-val { font-size: 2rem; }
       #ip-info { font-size: 1rem; }
+    }
+
+    /* ── speed chart ── */
+    #chart-section {
+      display: none;
+      width: 100%;
+      max-width: 880px;
+      animation: slide-up 0.45s cubic-bezier(0.16,1,0.3,1);
+    }
+    #chart-section.visible { display: block; }
+    #speed-chart {
+      width: 100%;
+      aspect-ratio: 4 / 1;
+      display: block;
+      border-radius: 1rem;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+    }
+
+    /* ── buffer bloat ── */
+    #bloat-section {
+      display: none;
+      width: 100%;
+      max-width: 880px;
+      animation: slide-up 0.45s cubic-bezier(0.16,1,0.3,1);
+    }
+    #bloat-section.visible { display: block; }
+    .bloat-card {
+      display: flex;
+      align-items: center;
+      gap: 2.2rem;
+      padding: 1.6rem 2.2rem;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 1rem;
+    }
+    .bloat-grade-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.3rem;
+      flex-shrink: 0;
+      min-width: 4rem;
+    }
+    #b-grade {
+      font-size: 3.4rem;
+      font-weight: 200;
+      line-height: 1;
+      letter-spacing: -0.04em;
+    }
+    #b-grade-desc {
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    .bloat-div {
+      width: 1px;
+      height: 4.5rem;
+      background: var(--border);
+      flex-shrink: 0;
+    }
+    .bloat-hdr {
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 0.55rem;
+    }
+    .bloat-metrics { flex: 1; }
+    .bm-row {
+      display: flex;
+      align-items: baseline;
+      gap: 0.5rem;
+      line-height: 1.9;
+    }
+    .bm-key {
+      font-size: 0.88rem;
+      color: var(--muted);
+      flex: 1;
+      white-space: nowrap;
+    }
+    .bm-val {
+      font-size: 1.15rem;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+      color: var(--text);
+    }
+    .bm-ms { font-size: 0.78rem; color: var(--dim); }
+    .bm-delta {
+      font-size: 0.82rem;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+      min-width: 4.5rem;
+      text-align: right;
+    }
+    .bm-delta.pos  { color: #f87171; }
+    .bm-delta.zero { color: var(--dim); }
+
+    @media (max-width: 700px) {
+      .bloat-card { gap: 1.2rem; padding: 1.2rem 1rem; flex-wrap: wrap; }
+      .bloat-div  { width: 100%; height: 1px; }
+      .bloat-grade-wrap { flex-direction: row; gap: 0.8rem; min-width: unset; }
+      #b-grade { font-size: 2.6rem; }
+    }
+
+    /* ── test history ── */
+    #history-section {
+      display: none;
+      width: 100%;
+      max-width: 880px;
+    }
+    #history-section.visible { display: block; }
+    .history-hdr {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 0.65rem;
+    }
+    .history-hdr-title {
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    #btn-clear-history {
+      font-family: 'Inter', sans-serif;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--muted);
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: 100px;
+      padding: 0.18rem 0.7rem;
+      cursor: pointer;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    #btn-clear-history:hover { color: var(--text); border-color: var(--muted); }
+    .history-wrap {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 1rem;
+      overflow: hidden;
+    }
+    .history-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    .history-table th {
+      padding: 0.6rem 1rem;
+      text-align: left;
+      font-size: 0.70rem;
+      font-weight: 700;
+      letter-spacing: 0.10em;
+      text-transform: uppercase;
+      color: var(--dim);
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+    .history-table td {
+      padding: 0.65rem 1rem;
+      font-size: 0.92rem;
+      font-variant-numeric: tabular-nums;
+      color: var(--text);
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+    .history-table tbody tr:last-child td { border-bottom: none; }
+    .history-table td em { font-style: normal; font-size: 0.78rem; color: var(--dim); margin-left: 0.15rem; }
+    .hr-new td { background: var(--hover-bg); }
+    .hr-date  { color: var(--muted) !important; font-size: 0.85rem !important; }
+    .hr-dl    { color: var(--dl);     }
+    .hr-ul    { color: var(--ul);     }
+    .hr-ping  { color: var(--ping);   }
+    .hr-jitter{ color: var(--jitter); }
+    .hr-bloat-Ap, .hr-bloat-A { color: var(--ping); font-weight: 700; }
+    .hr-bloat-B  { color: var(--jitter); font-weight: 700; }
+    .hr-bloat-C, .hr-bloat-D, .hr-bloat-F { color: #f87171; font-weight: 700; }
+    .hr-loss-bad { color: #f87171; }
+    .hr-share { padding: 0.3rem !important; }
+    .share-btn {
+      padding: 0.4rem 0.8rem;
+      font-size: 0.75rem;
+      background: rgba(34, 211, 238, 0.1);
+      color: var(--dl);
+      border: 1px solid rgba(34, 211, 238, 0.3);
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-weight: 600;
+    }
+    .share-btn:hover {
+      background: rgba(34, 211, 238, 0.2);
+      border-color: rgba(34, 211, 238, 0.5);
+      transform: translateY(-1px);
+    }
+    @media (max-width: 700px) {
+      .history-wrap { overflow-x: auto; }
+      .history-table { min-width: 530px; }
+      .history-table th, .history-table td { padding: 0.55rem 0.7rem; }
     }
 
     /* ── theme toggle (top-right of header) ── */
@@ -395,6 +600,10 @@
     <button id="btn-share" style="display:none">Share Results</button>
   </div>
 
+  <div id="chart-section">
+    <canvas id="speed-chart"></canvas>
+  </div>
+
   <div id="results">
     <div class="r-card" data-m="dl">
       <div class="r-val" id="r-dl">—</div>
@@ -415,6 +624,66 @@
       <div class="r-val" id="r-jitter">—</div>
       <div class="r-label">Jitter</div>
       <div class="r-unit">ms</div>
+    </div>
+    <div class="r-card" data-m="loss">
+      <div class="r-val" id="r-loss">—</div>
+      <div class="r-label">Packet Loss</div>
+      <div class="r-unit">%</div>
+    </div>
+  </div>
+
+  <div id="bloat-section">
+    <div class="bloat-card">
+      <div class="bloat-grade-wrap">
+        <span id="b-grade">–</span>
+        <span id="b-grade-desc">Buffer Bloat</span>
+      </div>
+      <div class="bloat-div"></div>
+      <div class="bloat-metrics">
+        <div class="bloat-hdr">Latency under load</div>
+        <div class="bm-row">
+          <span class="bm-key">Baseline ping</span>
+          <span class="bm-val" id="b-base">–</span>
+          <span class="bm-ms">ms</span>
+          <span class="bm-delta"></span>
+        </div>
+        <div class="bm-row">
+          <span class="bm-key">Under download</span>
+          <span class="bm-val" id="b-dl-ping">–</span>
+          <span class="bm-ms">ms</span>
+          <span class="bm-delta" id="b-dl-delta"></span>
+        </div>
+        <div class="bm-row">
+          <span class="bm-key">Under upload</span>
+          <span class="bm-val" id="b-ul-ping">–</span>
+          <span class="bm-ms">ms</span>
+          <span class="bm-delta" id="b-ul-delta"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="history-section">
+    <div class="history-hdr">
+      <span class="history-hdr-title">Test History</span>
+      <button id="btn-clear-history">Clear</button>
+    </div>
+    <div class="history-wrap">
+      <table class="history-table">
+        <thead>
+          <tr>
+            <th>Time</th>
+            <th>Download</th>
+            <th>Upload</th>
+            <th>Ping</th>
+            <th>Jitter</th>
+            <th>Loss</th>
+            <th>Bloat</th>
+            <th>Share</th>
+          </tr>
+        </thead>
+        <tbody id="history-list"></tbody>
+      </table>
     </div>
   </div>
 </main>
@@ -648,11 +917,439 @@ function draw(g, value, progress, active, dimmed) {
   ctx.restore();
 }
 
+// ── Chart state ───────────────────────────────────────────────────────────────
+const dlPoints = [];   // { t: seconds, v: Mbps }
+const ulPoints = [];
+let chartT0      = null;  // Date.now() when test started (chart visibility trigger)
+let dlT0         = null;  // Date.now() when DL phase first produced a sample
+let ulT0         = null;  // Date.now() when UL phase first produced a sample
+let chartLastMs  = 0;
+const CHART_MS   = 350;   // sample every ~350ms
+
+function niceMax(v) {
+  const steps = [1,2,5,10,20,50,100,200,500,1000,2000,5000,10000];
+  const target = v * 1.25;
+  return steps.find(s => s >= target) || 10000;
+}
+function niceTime(t) {
+  const steps = [5,10,15,20,25,30,40,50,60,90,120];
+  for (const s of steps) if (s >= t + 2) return s;
+  return Math.ceil((t + 5) / 10) * 10;
+}
+function fmtMbps(v) {
+  if (v >= 1000) return (v / 1000).toFixed(v % 1000 === 0 ? 0 : 1) + 'G';
+  return v >= 10 ? v.toFixed(0) : v.toFixed(1);
+}
+
+function drawChart() {
+  const canvas = document.getElementById('speed-chart');
+  if (!canvas) return;
+  const dpr = window.devicePixelRatio || 1;
+  const W = canvas.clientWidth  * dpr;
+  const H = canvas.clientHeight * dpr;
+  if (!W || !H) return;
+  if (canvas.width !== W || canvas.height !== H) { canvas.width = W; canvas.height = H; }
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, W, H);
+
+  const allPts = [...dlPoints, ...ulPoints];
+  if (allPts.length === 0) return;
+
+  const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+  const cs      = getComputedStyle(document.documentElement);
+  const dlColor = cs.getPropertyValue('--dl').trim();
+  const ulColor = cs.getPropertyValue('--ul').trim();
+
+  // layout
+  const padL = Math.round(W * 0.085);
+  const padR = Math.round(W * 0.030);
+  const padT = Math.round(H * 0.20);
+  const padB = Math.round(H * 0.22);
+  const cW = W - padL - padR;
+  const cH = H - padT - padB;
+
+  // scales
+  const rawMax = Math.max(...allPts.map(p => p.v));
+  const yMax   = niceMax(rawMax);
+  const tMax   = Math.max(...allPts.map(p => p.t));
+  const xMax   = niceTime(tMax);
+  const xOf    = t => padL + (t / xMax) * cW;
+  const yOf    = v => padT + cH - Math.min(v / yMax, 1.05) * cH;
+
+  const neutral = isLight ? '#0f172a' : '#ffffff';
+
+  // horizontal grid + Y labels
+  const gridN = 4;
+  for (let i = 0; i <= gridN; i++) {
+    const y = padT + cH - (i / gridN) * cH;
+    const v = (i / gridN) * yMax;
+    ctx.save();
+    ctx.globalAlpha = 0.08;
+    ctx.strokeStyle = neutral;
+    ctx.lineWidth   = dpr;
+    ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(padL + cW, y); ctx.stroke();
+    ctx.globalAlpha = isLight ? 0.45 : 0.35;
+    ctx.fillStyle   = neutral;
+    ctx.font        = `${Math.round(9 * dpr)}px Inter,sans-serif`;
+    ctx.textAlign   = 'right';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(fmtMbps(v), padL - 5 * dpr, y);
+    ctx.restore();
+  }
+
+  // "Mbps" unit tag above Y axis
+  ctx.save();
+  ctx.globalAlpha  = isLight ? 0.35 : 0.28;
+  ctx.fillStyle    = neutral;
+  ctx.font         = `600 ${Math.round(8 * dpr)}px Inter,sans-serif`;
+  ctx.textAlign    = 'right';
+  ctx.textBaseline = 'bottom';
+  ctx.fillText('Mbps', padL - 5 * dpr, padT - 3 * dpr);
+  ctx.restore();
+
+  // X axis time ticks
+  const xStep = xMax <= 10 ? 2 : xMax <= 20 ? 5 : xMax <= 40 ? 10 : 15;
+  for (let t = 0; t <= xMax; t += xStep) {
+    ctx.save();
+    ctx.globalAlpha  = isLight ? 0.38 : 0.28;
+    ctx.fillStyle    = neutral;
+    ctx.font         = `${Math.round(8.5 * dpr)}px Inter,sans-serif`;
+    ctx.textAlign    = 'center';
+    ctx.textBaseline = 'top';
+    ctx.fillText(t + 's', xOf(t), padT + cH + 5 * dpr);
+    ctx.restore();
+  }
+
+  // legend: DL on left quarter, UL on right quarter — both start at t=0
+  function phaseLabel(pts, label, color, xCenter) {
+    if (pts.length === 0) return;
+    const peak = Math.max(...pts.map(p => p.v));
+    ctx.save();
+    ctx.globalAlpha  = isLight ? 0.60 : 0.55;
+    ctx.fillStyle    = color;
+    ctx.font         = `700 ${Math.round(8.5 * dpr)}px Inter,sans-serif`;
+    ctx.textAlign    = 'center';
+    ctx.textBaseline = 'bottom';
+    ctx.fillText(`${label}  ${fmtMbps(peak)} Mbps`, xCenter, padT - 5 * dpr);
+    ctx.restore();
+  }
+  phaseLabel(dlPoints, 'DOWNLOAD', dlColor, padL + cW * 0.25);
+  phaseLabel(ulPoints, 'UPLOAD',   ulColor, padL + cW * 0.75);
+
+  // draw one phase line + area fill
+  function drawLine(pts, color) {
+    if (pts.length === 0) return;
+    if (pts.length === 1) {
+      ctx.save();
+      ctx.fillStyle = color; ctx.globalAlpha = 0.9;
+      ctx.beginPath(); ctx.arc(xOf(pts[0].t), yOf(pts[0].v), 4 * dpr, 0, 2 * Math.PI); ctx.fill();
+      ctx.restore(); return;
+    }
+
+    // area fill
+    ctx.save();
+    ctx.globalAlpha = isLight ? 0.07 : 0.11;
+    ctx.fillStyle   = color;
+    ctx.beginPath();
+    ctx.moveTo(xOf(pts[0].t), padT + cH);
+    pts.forEach(p => ctx.lineTo(xOf(p.t), yOf(p.v)));
+    ctx.lineTo(xOf(pts[pts.length - 1].t), padT + cH);
+    ctx.closePath(); ctx.fill();
+    ctx.restore();
+
+    // smooth line via midpoint quadratic bezier
+    ctx.save();
+    ctx.strokeStyle = color;
+    ctx.lineWidth   = 2.5 * dpr;
+    ctx.lineJoin    = 'round';
+    ctx.lineCap     = 'round';
+    if (!isLight) { ctx.shadowColor = color; ctx.shadowBlur = 8 * dpr; }
+    ctx.beginPath();
+    ctx.moveTo(xOf(pts[0].t), yOf(pts[0].v));
+    for (let i = 1; i < pts.length; i++) {
+      const cur = pts[i];
+      if (i < pts.length - 1) {
+        const next = pts[i + 1];
+        const mx = (xOf(cur.t) + xOf(next.t)) / 2;
+        const my = (yOf(cur.v) + yOf(next.v)) / 2;
+        ctx.quadraticCurveTo(xOf(cur.t), yOf(cur.v), mx, my);
+      } else {
+        ctx.lineTo(xOf(cur.t), yOf(cur.v));
+      }
+    }
+    ctx.stroke();
+
+    // end dot
+    const last = pts[pts.length - 1];
+    ctx.shadowBlur  = 0;
+    ctx.globalAlpha = 1;
+    ctx.fillStyle   = color;
+    ctx.beginPath(); ctx.arc(xOf(last.t), yOf(last.v), 4 * dpr, 0, 2 * Math.PI); ctx.fill();
+    ctx.restore();
+  }
+
+  drawLine(dlPoints, dlColor);
+  drawLine(ulPoints, ulColor);
+}
+
+// ── Buffer bloat ─────────────────────────────────────────────────────────────
+// The LibreSpeed worker only measures ping during the dedicated ts=2 phase.
+// We fire parallel fetch pings to /backend/empty during DL and UL to measure
+// loaded latency independently, which is the true buffer bloat signal.
+const bloatDlSamples = [];  // RTT samples (ms) while download is saturating link
+const bloatUlSamples = [];  // RTT samples (ms) while upload is saturating link
+let bloatTimer  = null;
+let bloatActive = false;
+let bloatShown  = false;
+let prevTs      = -1;
+
+function startBloatPing(arr) {
+  stopBloatPing();
+  bloatActive = false;
+  bloatTimer = setInterval(async () => {
+    if (bloatActive) return;
+    bloatActive = true;
+    try {
+      const t0 = performance.now();
+      await fetch('backend/empty?' + (t0 | 0), { cache: 'no-store' });
+      arr.push(performance.now() - t0);
+    } catch(_) {}
+    bloatActive = false;
+  }, 400);
+}
+function stopBloatPing() {
+  if (bloatTimer) { clearInterval(bloatTimer); bloatTimer = null; }
+  bloatActive = false;
+}
+
+function bloatGrade(ms) {
+  if (ms <   5) return { g: 'A+', color: 'var(--ping)',    desc: 'Excellent' };
+  if (ms <  30) return { g: 'A',  color: 'var(--ping)',    desc: 'Good'      };
+  if (ms <  60) return { g: 'B',  color: 'var(--jitter)',  desc: 'Acceptable'};
+  if (ms < 100) return { g: 'C',  color: '#f97316',        desc: 'Poor'      };
+  if (ms < 200) return { g: 'D',  color: '#f87171',        desc: 'Bad'       };
+  return         { g: 'F',  color: '#f87171',        desc: 'Critical'  };
+}
+
+function showBloat(basePing) {
+  if (!basePing || basePing <= 0) return;
+  if (bloatDlSamples.length === 0 && bloatUlSamples.length === 0) return;
+
+  const median = arr => {
+    if (!arr.length) return null;
+    const s = [...arr].sort((a, b) => a - b);
+    const m = Math.floor(s.length / 2);
+    return s.length % 2 === 0 ? (s[m - 1] + s[m]) / 2 : s[m];
+  };
+
+  const dlPing = median(bloatDlSamples);
+  const ulPing = median(bloatUlSamples);
+  const dlInc  = dlPing !== null ? dlPing - basePing : null;
+  const ulInc  = ulPing !== null ? ulPing - basePing : null;
+  const worst  = Math.max(dlInc ?? -Infinity, ulInc ?? -Infinity);
+  if (worst < 0) return; // measurement noise, skip
+
+  const { g, color, desc } = bloatGrade(worst);
+  lastBloatGrade = g;
+  document.getElementById('b-grade').textContent      = g;
+  document.getElementById('b-grade').style.color      = color;
+  document.getElementById('b-grade-desc').textContent = desc;
+  document.getElementById('b-base').textContent       = basePing.toFixed(0);
+
+  function fillRow(valId, deltaId, ping, inc) {
+    if (ping === null) { document.getElementById(valId).textContent = '–'; return; }
+    document.getElementById(valId).textContent = ping.toFixed(0);
+    const el  = document.getElementById(deltaId);
+    const pos = inc > 5;
+    el.textContent = (inc >= 0 ? '+' : '') + inc.toFixed(0) + ' ms';
+    el.className   = 'bm-delta ' + (pos ? 'pos' : 'zero');
+  }
+  fillRow('b-dl-ping', 'b-dl-delta', dlPing, dlInc);
+  fillRow('b-ul-ping', 'b-ul-delta', ulPing, ulInc);
+
+  document.getElementById('bloat-section').classList.add('visible');
+}
+
+// ── Packet loss ──────────────────────────────────────────────────────────────
+// Measured during the dedicated ping phase (ts=2) with parallel fetch probes.
+// Each probe has a 1500ms timeout; missed/timed-out = lost packet.
+let lossTotal    = 0;
+let lossReceived = 0;
+let lossTimer    = null;
+let lossValue    = null; // final percentage, set when done
+
+function startLossTest() {
+  stopLossTest();
+  lossTotal = 0; lossReceived = 0;
+  lossTimer = setInterval(async () => {
+    lossTotal++;
+    try {
+      await Promise.race([
+        fetch('backend/empty?' + lossTotal, { cache: 'no-store' }),
+        new Promise((_, rej) => setTimeout(() => rej(), 1500)),
+      ]);
+      lossReceived++;
+    } catch(_) {}
+  }, 200);
+}
+function stopLossTest() {
+  if (lossTimer) { clearInterval(lossTimer); lossTimer = null; }
+}
+function showLoss() {
+  if (lossTotal === 0) return;
+  const pct = ((lossTotal - lossReceived) / lossTotal) * 100;
+  lossValue = pct;
+  const el  = document.getElementById('r-loss');
+  el.textContent  = pct === 0 ? '0.0' : pct.toFixed(1);
+  el.style.color  = pct === 0       ? 'var(--ping)'
+                  : pct < 2         ? 'var(--jitter)'
+                  :                   '#f87171';
+}
+
+// ── Grade calculation ───────────────────────────────────────────────────────────
+function calculateGrade(dl, ul, ping, jitter, loss, latencyUnderload) {
+  // Grade calculation based on multiple criteria
+  // Returns object with {grade: "A", criteria: {...}}
+
+  const criteria = {
+    dl: dl >= 100 ? 'A' : dl >= 50 ? 'B' : dl >= 20 ? 'C' : dl >= 10 ? 'D' : dl >= 5 ? 'E' : 'F',
+    ul: ul >= 100 ? 'A' : ul >= 50 ? 'B' : ul >= 20 ? 'C' : ul >= 10 ? 'D' : ul >= 5 ? 'E' : 'F',
+    ping: ping <= 10 ? 'A' : ping <= 25 ? 'B' : ping <= 50 ? 'C' : ping <= 100 ? 'D' : ping <= 200 ? 'E' : 'F',
+    jitter: jitter <= 5 ? 'A' : jitter <= 10 ? 'B' : jitter <= 20 ? 'C' : jitter <= 40 ? 'D' : jitter <= 60 ? 'E' : 'F',
+    loss: loss === 0 ? 'A' : loss < 1 ? 'B' : loss < 2 ? 'C' : loss < 5 ? 'D' : loss < 10 ? 'E' : 'F'
+  };
+
+  // Calculate overall grade (worst of all criteria)
+  const grades = ['A', 'B', 'C', 'D', 'E', 'F'];
+  const gradeValues = { A: 6, B: 5, C: 4, D: 3, E: 2, F: 1 };
+
+  let worstGrade = 'A';
+  let worstValue = 6;
+
+  for (const key in criteria) {
+    const val = gradeValues[criteria[key]];
+    if (val < worstValue) {
+      worstValue = val;
+      worstGrade = criteria[key];
+    }
+  }
+
+  // If latency underload is significantly worse (>20ms worse than base ping), downgrade grade
+  if (latencyUnderload && parseFloat(latencyUnderload) > 20) {
+    const currentIndex = grades.indexOf(worstGrade);
+    if (currentIndex < grades.length - 1) {
+      worstGrade = grades[currentIndex + 1];
+    }
+  }
+
+  return {
+    grade: worstGrade,
+    criteria: criteria
+  };
+}
+
+// ── Test history ─────────────────────────────────────────────────────────────
+const HIST_KEY = 'ls-history';
+const HIST_MAX = 10;
+let lastBloatGrade = null; // grade letter set by showBloat, used when saving
+
+function getHistory() {
+  try { return JSON.parse(localStorage.getItem(HIST_KEY)) || []; } catch(_) { return []; }
+}
+
+function saveHistory(arr) {
+  localStorage.setItem(HIST_KEY, JSON.stringify(arr));
+}
+
+function fmtHistDate(ts) {
+  const d    = new Date(ts);
+  const now  = new Date();
+  const time = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  if (d.toDateString() === now.toDateString()) return time;
+  const yest = new Date(now); yest.setDate(now.getDate() - 1);
+  if (d.toDateString() === yest.toDateString()) return 'Yesterday ' + time;
+  if (now - d < 7 * 86400000) return d.toLocaleDateString([], { weekday: 'short' }) + ' ' + time;
+  return d.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' ' + time;
+}
+
+function renderHistory() {
+  const hist    = getHistory();
+  const section = document.getElementById('history-section');
+  const tbody   = document.getElementById('history-list');
+  if (!hist.length) { section.classList.remove('visible'); return; }
+  section.classList.add('visible');
+  tbody.innerHTML = hist.map((r, i) => {
+    const bc = r.bloat ? 'hr-bloat-' + r.bloat.replace('+', 'p') : '';
+    const lc = r.loss == null ? '' : r.loss === 0 ? 'hr-ping' : r.loss < 2 ? 'hr-jitter' : 'hr-loss-bad';
+    const lv = r.loss == null ? '–' : r.loss === 0 ? '0.0%' : r.loss.toFixed(1) + '%';
+    const shareBtn = r.testId ? `<button class="share-btn" data-test-id="${r.testId}" title="Share result">Share</button>` : '–';
+    return `<tr class="${i === 0 ? 'hr-new' : ''}">
+      <td class="hr-date">${fmtHistDate(r.ts)}</td>
+      <td class="hr-dl">${fmtResult(r.dl)}<em> Mbps</em></td>
+      <td class="hr-ul">${fmtResult(r.ul)}<em> Mbps</em></td>
+      <td class="hr-ping">${fmtResult(r.ping)}<em> ms</em></td>
+      <td class="hr-jitter">${fmtResult(r.jitter)}<em> ms</em></td>
+      <td class="${lc}">${lv}</td>
+      <td class="${bc}">${r.bloat || '–'}</td>
+      <td class="hr-share">${shareBtn}</td>
+    </tr>`;
+  }).join('');
+}
+
+function addHistoryEntry(dl, ul, ping, jitter, loss, bloat, testId) {
+  const hist = getHistory();
+  hist.unshift({ ts: Date.now(), dl, ul, ping, jitter, loss, bloat, testId });
+  if (hist.length > HIST_MAX) hist.length = HIST_MAX;
+  saveHistory(hist);
+  renderHistory();
+}
+
 // ── App ──────────────────────────────────────────────────────────────────────
 let state  = 'idle';
 let data   = null;
 let testId = null;
 let sp     = null;
+let chartData = { dl: [], ul: [] };  // Store chart data for final results
+let gradeData = null;  // Store grade calculation results
+
+// ── Device identity (survives IP change) ───────────────────────────────────────
+// clientId: random UUID stored in localStorage — stable per browser install
+// fingerprint: hash of stable browser attributes — survives cache clear
+function uuidv4() {
+  return ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c =>
+    (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c/4).toString(16)
+  );
+}
+async function sha256hex(str) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+  return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2,'0')).join('');
+}
+async function getClientIdentity() {
+  // 1. persistent clientId from localStorage (or generate on first visit)
+  const CID_KEY = 'ls-client-id';
+  let clientId = localStorage.getItem(CID_KEY);
+  if (!clientId) {
+    clientId = uuidv4();
+    localStorage.setItem(CID_KEY, clientId);
+  }
+  // 2. lightweight fingerprint from attributes the browser allows
+  const nav = navigator;
+  const parts = [
+    nav.userAgent || '',
+    nav.language || '',
+    (nav.languages || []).join(','),
+    String(nav.hardwareConcurrency || ''),
+    String(nav.deviceMemory || ''),
+    nav.platform || '',
+    screen.width + 'x' + screen.height,
+    screen.colorDepth + '',
+    Intl.DateTimeFormat().resolvedOptions().timeZone || '',
+    String(new Date().getTimezoneOffset()),
+  ].join('|');
+  const fingerprint = await sha256hex(parts);
+  // combined id = clientId anchored by fingerprint (so cache-clear still links)
+  return clientId + ':' + fingerprint.slice(0, 16);
+}
 
 window.addEventListener('DOMContentLoaded', () => {
   GAUGES.dl.el     = document.getElementById('g-dl');
@@ -667,14 +1364,19 @@ window.addEventListener('DOMContentLoaded', () => {
     const next = themeChk.checked ? 'light' : 'dark';
     document.documentElement.setAttribute('data-theme', next);
     localStorage.setItem('ls-theme', next);
-    // redraw gauges immediately so canvas doesn't keep stale dark-mode colors
-    if (state !== 'running') Object.values(GAUGES).forEach(g => draw(g, 0, 0, false, false));
+    // redraw gauges + chart immediately so canvas doesn't keep stale dark-mode colors
+    if (state !== 'running') {
+      Object.values(GAUGES).forEach(g => draw(g, 0, 0, false, false));
+      drawChart();
+    }
   });
 
   Object.values(GAUGES).forEach(g => draw(g, 0, 0, false, false));
+  renderHistory(); // show existing history on page load
 
   sp = new Speedtest();
   sp.setParameter('telemetry_level', 'basic');
+  sp.setParameter('count_ping', '30'); // longer ping phase gives more loss samples
   sp.onupdate = d => { data = d; };
   sp.onend    = () => { state = 'done'; };
 
@@ -694,16 +1396,47 @@ window.addEventListener('DOMContentLoaded', () => {
     btn.textContent = 'Abort';
     btn.classList.add('abort');
     Object.values(GAUGES).forEach(g => draw(g, 0, 0, false, false));
-    sp.start();
+    // reset chart
+    dlPoints.length = 0; ulPoints.length = 0;
+    chartT0 = null; dlT0 = null; ulT0 = null; chartLastMs = 0;
+    document.getElementById('chart-section').classList.remove('visible');
+    // reset buffer bloat
+    bloatDlSamples.length = 0; bloatUlSamples.length = 0;
+    prevTs = -1; bloatShown = false; lastBloatGrade = null;
+    lossTotal = 0; lossReceived = 0; lossValue = null;
+    stopBloatPing(); stopLossTest();
+    document.getElementById('r-loss').textContent = '—';
+    document.getElementById('r-loss').style.color = '';
+    document.getElementById('bloat-section').classList.remove('visible');
+    // attach device identity so telemetry links repeated tests to this machine
+    getClientIdentity().then(id => {
+      sp.setParameter('client_id', id);
+      sp.start();
+    });
   });
 
   // share button → open dialog
   btnShare.addEventListener('click', () => {
     if (!testId) return;
-    const url = location.origin + location.pathname.replace(/[^/]*$/, '') + 'results/?id=' + testId;
-    document.getElementById('share-img').src   = url;
-    document.getElementById('share-link').value = url;
+    let imgUrl = location.origin + location.pathname.replace(/[^/]*$/, '') + 'results/?id=' + testId;
+    let viewUrl = location.origin + location.pathname.replace(/[^/]*$/, '') + 'results/view?id=' + testId;
+    document.getElementById('share-img').src   = imgUrl;   // PNG image no modal
+    document.getElementById('share-link').value = viewUrl; // VIEW link para copiar
     document.getElementById('share-dialog').showModal();
+  });
+
+  // Share buttons in history table (event delegation)
+  document.addEventListener('click', (e) => {
+    if (e.target.classList.contains('share-btn')) {
+      const testId = e.target.getAttribute('data-test-id');
+      if (testId) {
+        let imgUrl = location.origin + location.pathname.replace(/[^/]*$/, '') + 'results/?id=' + testId;
+        let viewUrl = location.origin + location.pathname.replace(/[^/]*$/, '') + 'results/view?id=' + testId;
+        document.getElementById('share-img').src   = imgUrl;   // PNG image no modal
+        document.getElementById('share-link').value = viewUrl; // VIEW link para copiar
+        document.getElementById('share-dialog').showModal();
+      }
+    }
   });
 
   // copy link
@@ -725,6 +1458,11 @@ window.addEventListener('DOMContentLoaded', () => {
     document.getElementById('share-dialog').close()
   );
 
+  document.getElementById('btn-clear-history').addEventListener('click', () => {
+    localStorage.removeItem(HIST_KEY);
+    renderHistory();
+  });
+
   // render loop
   (function loop() {
     requestAnimationFrame(loop);
@@ -743,6 +1481,41 @@ window.addEventListener('DOMContentLoaded', () => {
     draw(GAUGES.ping,   (parseFloat(d.pingStatus)  ||0),       parseFloat(d.pingProgress)||0, ts===2, running && ts!==2);
     draw(GAUGES.jitter, (parseFloat(d.jitterStatus)||0),       0,                             ts===2, running && ts!==2);
 
+    // chart sample collection + buffer bloat phase tracking
+    if (running) {
+      if (!chartT0) {
+        chartT0 = Date.now();
+        document.getElementById('chart-section').classList.add('visible');
+      }
+      const now = Date.now();
+      if (now - chartLastMs >= CHART_MS) {
+        chartLastMs = now;
+        if (ts === 1) {
+          const v = parseFloat(d.dlStatus) || 0;
+          if (v > 0) {
+            if (!dlT0) dlT0 = now;
+            dlPoints.push({ t: (now - dlT0) / 1000, v });
+          }
+        }
+        if (ts === 3) {
+          const v = parseFloat(d.ulStatus) || 0;
+          if (v > 0) {
+            if (!ulT0) ulT0 = now;
+            ulPoints.push({ t: (now - ulT0) / 1000, v });
+          }
+        }
+      }
+
+      // start/stop parallel ping on phase transitions
+      if (ts !== prevTs) {
+        if (ts === 1) startBloatPing(bloatDlSamples);
+        if (ts === 2) { stopBloatPing(); startLossTest(); }     // ping phase: measure loss
+        if (ts === 3) { stopLossTest(); startBloatPing(bloatUlSamples); }
+        prevTs = ts;
+      }
+    }
+    if (running || done) drawChart();
+
     if (d.clientIp)
       document.getElementById('ip-info').innerHTML = `Connected via <strong>${d.clientIp}</strong>`;
 
@@ -756,7 +1529,35 @@ window.addEventListener('DOMContentLoaded', () => {
       btn.classList.remove('abort');
       if (d.testId) {
         testId = d.testId;
+        // Capture chart data and grade
+        chartData = {
+          dl: d.dlChartData || [],
+          ul: d.ulChartData || []
+        };
+        // Calculate grade
+        const dl = parseFloat(d.dlStatus) || 0;
+        const ul = parseFloat(d.ulStatus) || 0;
+        const ping = parseFloat(d.pingStatus) || 0;
+        const jitter = parseFloat(d.jitterStatus) || 0;
+        const latencyUnderload = d.latencyUnderload ? parseFloat(d.latencyUnderload) : 0;
+        gradeData = calculateGrade(dl, ul, ping, jitter, lossValue || 0, latencyUnderload);
         btnShare.style.display = '';
+      }
+      if (!bloatShown) {
+        stopBloatPing();
+        stopLossTest();
+        showLoss();
+        showBloat(parseFloat(d.pingStatus) || null);
+        bloatShown = true;
+        addHistoryEntry(
+          parseFloat(d.dlStatus)     || 0,
+          parseFloat(d.ulStatus)     || 0,
+          parseFloat(d.pingStatus)   || 0,
+          parseFloat(d.jitterStatus) || 0,
+          lossValue,
+          lastBloatGrade,
+          testId
+        );
       }
     }
   })();

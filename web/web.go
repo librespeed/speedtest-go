@@ -70,6 +70,7 @@ func ListenAndServe(conf *config.Config) error {
 	r.Get(conf.BaseURL+"/backend/garbage", garbage)
 	r.Get(conf.BaseURL+"/getIP", getIP)
 	r.Get(conf.BaseURL+"/backend/getIP", getIP)
+	r.Get(conf.BaseURL+"/results/view", results.ViewPage)
 	r.Get(conf.BaseURL+"/results", results.DrawPNG)
 	r.Get(conf.BaseURL+"/results/", results.DrawPNG)
 	r.Get(conf.BaseURL+"/backend/results", results.DrawPNG)

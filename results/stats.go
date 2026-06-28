@@ -1,6 +1,7 @@
 package results
 
 import (
+	"fmt"
 	"html/template"
 	"net/http"
 
@@ -15,20 +16,19 @@ import (
 )
 
 type StatsData struct {
-	NoPassword bool
-	LoggedIn   bool
-	Data       []schema.TelemetryData
+	NoPassword   bool
+	LoggedIn     bool
+	Data         []schema.TelemetryData
+	ConfigDebug  map[string]interface{}
 }
 
 var (
 	key   = []byte(securecookie.GenerateRandomKey(32))
 	store = sessions.NewCookieStore(key)
-	conf = config.LoadedConfig()
 )
 
 func init() {
 	store.Options = &sessions.Options{
-		Path:     conf.BaseURL+"/stats",
 		MaxAge:   3600 * 1, // 1 hour
 		HttpOnly: true,
 		SameSite: http.SameSiteStrictMode,
@@ -36,8 +36,14 @@ func init() {
 }
 
 func Stats(w http.ResponseWriter, r *http.Request) {
+	// IMPORTANT: call LoadedConfig() inside the function, NOT as a package var.
+	// A package-level var would snapshot the config at import time (BEFORE main()
+	// loads settings.toml), freezing the defaults.
+	conf := config.LoadedConfig()
+	store.Options.Path = conf.BaseURL + "/stats"
+
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	t, err := template.New("template").Parse(htmlTemplate)
+	t, err := template.New("template").Parse(statsTemplate)
 	if err != nil {
 		log.Errorf("Failed to parse template: %s", err)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -51,7 +57,8 @@ func Stats(w http.ResponseWriter, r *http.Request) {
 
 	var data StatsData
 
-	if conf.StatsPassword == "PASSWORD" {
+	// Check if password is properly configured (not default value)
+	if conf.StatsPassword == "" || conf.StatsPassword == "PASSWORD" {
 		data.NoPassword = true
 	}
 
@@ -111,87 +118,411 @@ func Stats(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-const htmlTemplate = `<!DOCTYPE html>
-<html>
+const statsTemplate = `<!DOCTYPE html>
+<html lang="en">
 <head>
-<title>LibreSpeed - Stats</title>
-<style type="text/css">
-	html,body{
-		margin:0;
-		padding:0;
-		border:none;
-		width:100%; min-height:100%;
-	}
-	html{
-		background-color: hsl(198,72%,35%);
-		font-family: "Segoe UI","Roboto",sans-serif;
-	}
-	body{
-		background-color:#FFFFFF;
-		box-sizing:border-box;
-		width:100%;
-		max-width:70em;
-		margin:4em auto;
-		box-shadow:0 1em 6em #00000080;
-		padding:1em 1em 4em 1em;
-		border-radius:0.4em;
-	}
-	h1,h2,h3,h4,h5,h6{
-		font-weight:300;
-		margin-bottom: 0.1em;
-	}
-	h1{
-		text-align:center;
-	}
-	table{
-		margin:2em 0;
-		width:100%;
-	}
-	table, tr, th, td {
-		border: 1px solid #AAAAAA;
-	}
-	th {
-		width: 6em;
-	}
-	td {
-		word-break: break-all;
-	}
-</style>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Speed Test Admin - Statistics</title>
+	<style>
+		* { margin: 0; padding: 0; box-sizing: border-box; }
+
+		body {
+			font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+			background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+			min-height: 100vh;
+			padding: 2rem 1rem;
+		}
+
+		.container {
+			max-width: 1400px;
+			margin: 0 auto;
+		}
+
+		.header {
+			background: rgba(255, 255, 255, 0.1);
+			backdrop-filter: blur(10px);
+			border-radius: 16px;
+			padding: 2rem;
+			margin-bottom: 2rem;
+			display: flex;
+			justify-content: space-between;
+			align-items: center;
+			flex-wrap: wrap;
+			gap: 1rem;
+		}
+
+		.header h1 {
+			color: white;
+			font-weight: 600;
+			font-size: 1.8rem;
+		}
+
+		.header .subtitle {
+			color: rgba(255, 255, 255, 0.8);
+			font-size: 0.9rem;
+		}
+
+		.login-form {
+			background: white;
+			border-radius: 16px;
+			padding: 2rem;
+			max-width: 400px;
+			margin: 4rem auto;
+			box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+		}
+
+		.login-form h2 {
+			margin-bottom: 1.5rem;
+			color: #333;
+		}
+
+		.login-form input {
+			width: 100%;
+			padding: 0.8rem;
+			margin-bottom: 1rem;
+			border: 1px solid #ddd;
+			border-radius: 8px;
+			font-size: 1rem;
+		}
+
+		.login-form button {
+			width: 100%;
+			padding: 0.8rem;
+			background: #667eea;
+			color: white;
+			border: none;
+			border-radius: 8px;
+			font-size: 1rem;
+			cursor: pointer;
+			transition: background 0.3s;
+		}
+
+		.login-form button:hover {
+			background: #5568d3;
+		}
+
+		.search-form {
+			background: rgba(255, 255, 255, 0.1);
+			backdrop-filter: blur(10px);
+			border-radius: 16px;
+			padding: 1.5rem;
+			margin-bottom: 2rem;
+			display: flex;
+			gap: 1rem;
+			flex-wrap: wrap;
+			align-items: center;
+		}
+
+		.search-form input {
+			flex: 1;
+			min-width: 200px;
+			padding: 0.8rem;
+			border: none;
+			border-radius: 8px;
+			font-size: 1rem;
+		}
+
+		.search-form button {
+			padding: 0.8rem 1.5rem;
+			background: #22d3ee;
+			color: #0a0c10;
+			border: none;
+			border-radius: 8px;
+			font-size: 1rem;
+			font-weight: 600;
+			cursor: pointer;
+			transition: all 0.3s;
+		}
+
+		.search-form button:hover {
+			background: #1ebbd4;
+			transform: translateY(-2px);
+		}
+
+		.logout-btn {
+			padding: 0.8rem 1.5rem;
+			background: rgba(255, 255, 255, 0.2);
+			color: white;
+			border: none;
+			border-radius: 8px;
+			cursor: pointer;
+			font-size: 1rem;
+			transition: background 0.3s;
+		}
+
+		.logout-btn:hover {
+			background: rgba(255, 255, 255, 0.3);
+		}
+
+		.results-grid {
+			display: grid;
+			grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+			gap: 1.5rem;
+		}
+
+		.result-card {
+			background: white;
+			border-radius: 16px;
+			padding: 1.5rem;
+			box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+			transition: transform 0.3s, box-shadow 0.3s;
+		}
+
+		.result-card:hover {
+			transform: translateY(-5px);
+			box-shadow: 0 15px 50px rgba(0, 0, 0, 0.15);
+		}
+
+		.result-card { cursor: pointer; }
+
+		#result-modal {
+			position: fixed;
+			top: 0; left: 0;
+			width: 100%; height: 100%;
+			background: rgba(0, 0, 0, 0.8);
+			backdrop-filter: blur(4px);
+			z-index: 1000;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			padding: 2rem;
+		}
+
+		.modal-content {
+			position: relative;
+			width: 100%;
+			max-width: 1200px;
+			height: 90vh;
+			background: #0a0c10;
+			border-radius: 16px;
+			overflow: hidden;
+			box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+		}
+
+		.modal-close {
+			position: absolute;
+			top: 0.75rem; right: 0.75rem;
+			z-index: 10;
+			width: 2.5rem; height: 2.5rem;
+			border: none;
+			border-radius: 50%;
+			background: rgba(255, 255, 255, 0.15);
+			color: white;
+			font-size: 1.5rem;
+			cursor: pointer;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			transition: background 0.2s;
+		}
+
+		.modal-close:hover {
+			background: rgba(255, 255, 255, 0.3);
+		}
+
+		#result-frame {
+			width: 100%;
+			height: 100%;
+			border: none;
+		}
+
+		.result-card .header {
+			background: none;
+			padding: 0;
+			margin-bottom: 1rem;
+			display: flex;
+			justify-content: space-between;
+			align-items: start;
+		}
+
+		.result-card .timestamp {
+			color: #666;
+			font-size: 0.8rem;
+		}
+
+		.result-card .test-id {
+			color: #667eea;
+			font-size: 0.75rem;
+			font-weight: 600;
+		}
+
+		.metrics {
+			display: grid;
+			grid-template-columns: 1fr 1fr;
+			gap: 0.5rem;
+		}
+
+		.metric {
+			padding: 0.5rem;
+			background: #f8f9fa;
+			border-radius: 8px;
+		}
+
+		.metric .label {
+			font-size: 0.7rem;
+			color: #666;
+			text-transform: uppercase;
+			letter-spacing: 0.05em;
+		}
+
+		.metric .value {
+			font-size: 1.2rem;
+			font-weight: 600;
+			color: #333;
+		}
+
+		.metric.download .value { color: #22d3ee; }
+		.metric.upload .value { color: #a78bfa; }
+		.metric.ping .value { color: #34d399; }
+		.metric.jitter .value { color: #fbbf24; }
+
+		.details {
+			margin-top: 1rem;
+			padding-top: 1rem;
+			border-top: 1px solid #eee;
+			font-size: 0.85rem;
+			color: #666;
+		}
+
+		.no-password {
+			background: white;
+			border-radius: 16px;
+			padding: 3rem;
+			text-align: center;
+			box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+		}
+
+		.no-password h2 {
+			color: #333;
+			margin-bottom: 1rem;
+		}
+
+		.no-password p {
+			color: #666;
+		}
+
+		@media (max-width: 768px) {
+			.results-grid {
+				grid-template-columns: 1fr;
+			}
+
+			.metrics {
+				grid-template-columns: 1fr;
+			}
+		}
+	</style>
 </head>
 <body>
-<h1>LibreSpeed - Stats</h1>
-{{ if .NoPassword }}
-		Please set statistics_password in settings.toml to enable access.
-{{ else if .LoggedIn }}
-	<form action="stats" method="GET"><input type="hidden" name="op" value="logout" /><input type="submit" value="Logout" /></form>
-	<form action="stats" method="GET">
-		<h3>Search test results</h6>
-		<input type="hidden" name="op" value="id" />
-		<input type="text" name="id" id="id" placeholder="Test ID" value=""/>
-		<input type="submit" value="Find" />
-		<input type="submit" onclick="document.getElementById('id').value='L100'" value="Show last 100 tests" />
-	</form>
+	<div class="container">
+		{{ if .NoPassword }}
+			<div class="no-password">
+				<h2>Statistics Disabled</h2>
+				<p>Please set statistics_password in settings.toml to enable access.</p>
 
-	{{ range $i, $v := .Data }}
-	<table>
-		<tr><th>Test ID</th><td>{{ $v.UUID }}</td></tr>
-		<tr><th>Date and time</th><td>{{ $v.Timestamp }}</td></tr>
-		<tr><th>IP and ISP Info</th><td>{{ $v.IPAddress }}<br/>{{ $v.ISPInfo }}</td></tr>
-		<tr><th>User agent and locale</th><td>{{ $v.UserAgent }}<br/>{{ $v.Language }}</td></tr>
-		<tr><th>Download speed</th><td>{{ $v.Download }}</td></tr>
-		<tr><th>Upload speed</th><td>{{ $v.Upload }}</td></tr>
-		<tr><th>Ping</th><td>{{ $v.Ping }}</td></tr>
-		<tr><th>Jitter</th><td>{{ $v.Jitter }}</td></tr>
-		<tr><th>Log</th><td>{{ $v.Log }}</td></tr>
-		<tr><th>Extra info</th><td>{{ $v.Extra }}</td></tr>
-	</table>
+				<div style="margin-top: 2rem; padding: 1rem; background: rgba(255,0,0,0.1); border: 1px solid rgba(255,0,0,0.3); border-radius: 8px;">
+					<h3 style="color: #ff6b6b; margin-bottom: 1rem;">DEBUG INFO</h3>
+					{{ range $key, $value := .ConfigDebug }}
+						<p style="margin: 0.5rem 0; color: #e0e0e0;"><strong>{{ $key }}:</strong> {{ $value }}</p>
+					{{ end }}
+				</div>
+			</div>
+		{{ else if .LoggedIn }}
+			<div class="header">
+				<div>
+					<h1>🚀 Speed Test Admin</h1>
+					<p class="subtitle">View and manage test results</p>
+				</div>
+				<form action="stats" method="GET">
+					<input type="hidden" name="op" value="logout" />
+					<button type="submit" class="logout-btn">Logout</button>
+				</form>
+			</div>
+
+			<form action="stats" method="GET" class="search-form">
+				<input type="hidden" name="op" value="id" />
+				<input type="text" name="id" id="id" placeholder="Enter Test ID or leave empty for last 100" value=""/>
+				<button type="submit">Search</button>
+				<button type="button" onclick="document.getElementById('id').value='L100'; document.forms[1].submit();">Show Last 100</button>
+			</form>
+
+			<div class="results-grid">
+				{{ range $i, $v := .Data }}
+				<div class="result-card" onclick="openResult('{{ $v.UUID }}')">
+					<div class="header">
+						<div>
+							<div class="timestamp">{{ $v.Timestamp }}</div>
+							<div class="test-id">{{ $v.UUID }}</div>
+						</div>
+					</div>
+
+					<div class="metrics">
+						<div class="metric download">
+							<div class="label">Download</div>
+							<div class="value">{{ $v.Download }}</div>
+							<div class="label">Mbps</div>
+						</div>
+						<div class="metric upload">
+							<div class="label">Upload</div>
+							<div class="value">{{ $v.Upload }}</div>
+							<div class="label">Mbps</div>
+						</div>
+						<div class="metric ping">
+							<div class="label">Ping</div>
+							<div class="value">{{ $v.Ping }}</div>
+							<div class="label">ms</div>
+						</div>
+						<div class="metric jitter">
+							<div class="label">Jitter</div>
+							<div class="value">{{ $v.Jitter }}</div>
+							<div class="label">ms</div>
+						</div>
+					</div>
+
+					<div class="details">
+						<p><strong>IP:</strong> {{ $v.IPAddress }}</p>
+					</div>
+				</div>
+				{{ end }}
+			</div>
+		{{ else }}
+			<div class="login-form">
+				<h2>🔐 Admin Login</h2>
+				<form action="stats?op=login" method="POST">
+					<input type="password" name="password" placeholder="Enter password" value="" required/>
+					<button type="submit">Login</button>
+				</form>
+			</div>
+		{{ end }}
+	</div>
+
+	{{ if .LoggedIn }}
+	<!-- Result modal -->
+	<div id="result-modal" onclick="if(event.target===this)closeResult()" style="display:none;">
+		<div class="modal-content">
+			<button class="modal-close" onclick="closeResult()">&times;</button>
+			<iframe id="result-frame" src="" title="Test Result"></iframe>
+		</div>
+	</div>
 	{{ end }}
-{{ else }}
-	<form action="stats?op=login" method="POST">
-		<h3>Login</h3>
-		<input type="password" name="password" placeholder="Password" value=""/>
-		<input type="submit" value="Login" />
-	</form>
-{{ end }}
+
+	{{ if .LoggedIn }}
+	<script>
+		function openResult(uuid) {
+			// Resolve ID using same path as the share link, then load the view page
+			document.getElementById('result-frame').src = 'results/view?id=' + uuid;
+			document.getElementById('result-modal').style.display = 'flex';
+			document.body.style.overflow = 'hidden';
+		}
+		function closeResult() {
+			document.getElementById('result-modal').style.display = 'none';
+			document.getElementById('result-frame').src = '';
+			document.body.style.overflow = '';
+		}
+		document.addEventListener('keydown', (e) => {
+			if (e.key === 'Escape') closeResult();
+		});
+	</script>
+	{{ end }}
 </body>
 </html>`
