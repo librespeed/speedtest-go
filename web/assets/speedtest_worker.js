@@ -737,6 +737,22 @@ function measurePing(callback) {
 	xhr.send();
 }
 // telemetry
+function computeGrade(dl, ul, ping, jitter, latencyUnderload) {
+	const dlMbps = parseFloat(dl) || 0;
+	const ulMbps = parseFloat(ul) || 0;
+	const pingMs = parseFloat(ping) || 999;
+	const jitterMs = parseFloat(jitter) || 999;
+	const latMs = parseFloat(latencyUnderload) || 0;
+	let score = 100;
+	if (dlMbps < 5) score -= 30; else if (dlMbps < 25) score -= 15; else if (dlMbps < 100) score -= 5;
+	if (ulMbps < 2) score -= 20; else if (ulMbps < 10) score -= 10; else if (ulMbps < 50) score -= 5;
+	if (pingMs > 150) score -= 20; else if (pingMs > 80) score -= 10; else if (pingMs > 40) score -= 5;
+	if (jitterMs > 50) score -= 15; else if (jitterMs > 20) score -= 8; else if (jitterMs > 10) score -= 3;
+	if (latMs > 100) score -= 10; else if (latMs > 50) score -= 5;
+	let grade = score >= 90 ? 'A' : score >= 75 ? 'B' : score >= 60 ? 'C' : score >= 45 ? 'D' : score >= 30 ? 'E' : 'F';
+	return JSON.stringify({ grade, criteria: { dl: dlMbps, ul: ulMbps, ping: pingMs, jitter: jitterMs, latencyUnderload: latMs } });
+}
+
 function sendTelemetry(done) {
 	if (settings.telemetry_level < 1) return;
 	xhr = new XMLHttpRequest();
@@ -774,9 +790,26 @@ function sendTelemetry(done) {
 		fd.append("log", settings.telemetry_level > 1 ? log : "");
 		fd.append("extra", settings.telemetry_extra);
 		fd.append("client_id", settings.client_id);
+		const gradeData = computeGrade(dlStatus, ulStatus, pingStatus, jitterStatus, latencyUnderload);
+		fd.append("grade_data", gradeData);
+		fd.append("chart_data", JSON.stringify({ dl: dlChartData, ul: ulChartData }));
+		fd.append("latency_underload", latencyUnderload);
+		fd.append("ping_during_test", JSON.stringify(pingDuringTest));
 		xhr.send(fd);
 	} catch (ex) {
-		const postData = "extra=" + encodeURIComponent(settings.telemetry_extra) + "&ispinfo=" + encodeURIComponent(JSON.stringify(telemetryIspInfo)) + "&dl=" + encodeURIComponent(dlStatus) + "&ul=" + encodeURIComponent(ulStatus) + "&ping=" + encodeURIComponent(pingStatus) + "&jitter=" + encodeURIComponent(jitterStatus) + "&log=" + encodeURIComponent(settings.telemetry_level > 1 ? log : "") + "&client_id=" + encodeURIComponent(settings.client_id);
+		const gradeData = computeGrade(dlStatus, ulStatus, pingStatus, jitterStatus, latencyUnderload);
+		const postData = "extra=" + encodeURIComponent(settings.telemetry_extra)
+			+ "&ispinfo=" + encodeURIComponent(JSON.stringify(telemetryIspInfo))
+			+ "&dl=" + encodeURIComponent(dlStatus)
+			+ "&ul=" + encodeURIComponent(ulStatus)
+			+ "&ping=" + encodeURIComponent(pingStatus)
+			+ "&jitter=" + encodeURIComponent(jitterStatus)
+			+ "&log=" + encodeURIComponent(settings.telemetry_level > 1 ? log : "")
+			+ "&client_id=" + encodeURIComponent(settings.client_id)
+			+ "&grade_data=" + encodeURIComponent(gradeData)
+			+ "&chart_data=" + encodeURIComponent(JSON.stringify({ dl: dlChartData, ul: ulChartData }))
+			+ "&latency_underload=" + encodeURIComponent(latencyUnderload)
+			+ "&ping_during_test=" + encodeURIComponent(JSON.stringify(pingDuringTest));
 		xhr.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
 		xhr.send(postData);
 	}

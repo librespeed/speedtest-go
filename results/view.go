@@ -4,11 +4,17 @@ import (
 	"encoding/json"
 	"html/template"
 	"net/http"
+	"strings"
 
 	"github.com/librespeed/speedtest-go/config"
 	"github.com/librespeed/speedtest-go/database"
 	log "github.com/sirupsen/logrus"
 )
+
+// gradeInfo holds the parsed grade fields for template rendering.
+type gradeInfo struct {
+	Grade string
+}
 
 // ViewPage renders a beautiful HTML page with test results
 func ViewPage(w http.ResponseWriter, r *http.Request) {
@@ -54,35 +60,54 @@ func ViewPage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Parse the HTML template
-	t, err := template.New("results").Parse(viewTemplate)
+	t, err := template.New("results").Funcs(template.FuncMap{
+		"lower": strings.ToLower,
+	}).Parse(viewTemplate)
 	if err != nil {
 		http.Error(w, "Template error", http.StatusInternalServerError)
 		return
 	}
 
+	// Parse grade data
+	var grade gradeInfo
+	if record.GradeData != "" {
+		var gd struct {
+			Grade string `json:"grade"`
+		}
+		if err := json.Unmarshal([]byte(record.GradeData), &gd); err == nil {
+			grade.Grade = gd.Grade
+		}
+	}
+	if grade.Grade == "" {
+		grade.Grade = "—"
+	}
+
+	// ChartData is injected as raw JS — use template.JS to skip HTML escaping.
+	chartJS := template.JS("{}")
+	if record.ChartData != "" {
+		chartJS = template.JS(record.ChartData)
+	}
+
 	// Prepare data for template
 	data := struct {
-		Record      interface{}
-		BaseURL     string
-		Download    string
-		Upload      string
-		Ping        string
-		Jitter      string
-		Timestamp   string
-		IPAddress   string
-		ISPInfo     string
-		ISP         struct {
+		BaseURL   string
+		Download  string
+		Upload    string
+		Ping      string
+		Jitter    string
+		Timestamp string
+		IPAddress string
+		ISP       struct {
 			ProcessedString string
-			City           string
-			Region         string
-			Country        string
-			Organization   string
+			City            string
+			Region          string
+			Country         string
+			Organization    string
 		}
-		GradeData   string
-		ChartData   string
-		Latency     string
+		Grade   gradeInfo
+		Latency string
+		ChartJS template.JS
 	}{
-		Record:    record,
 		BaseURL:   conf.BaseURL,
 		Download:  record.Download,
 		Upload:    record.Upload,
@@ -90,23 +115,22 @@ func ViewPage(w http.ResponseWriter, r *http.Request) {
 		Jitter:    record.Jitter,
 		Timestamp: record.Timestamp.Format("2006-01-02 15:04:05"),
 		IPAddress: record.IPAddress,
-		ISPInfo:   record.ISPInfo,
 		ISP: struct {
 			ProcessedString string
-			City           string
-			Region         string
-			Country        string
-			Organization   string
+			City            string
+			Region          string
+			Country         string
+			Organization    string
 		}{
 			ProcessedString: ispInfo.ProcessedString,
-			City:           ispInfo.RawISPInfo.City,
-			Region:         ispInfo.RawISPInfo.Region,
-			Country:        ispInfo.RawISPInfo.Country,
-			Organization:   ispInfo.RawISPInfo.Org,
+			City:            ispInfo.RawISPInfo.City,
+			Region:          ispInfo.RawISPInfo.Region,
+			Country:         ispInfo.RawISPInfo.Country,
+			Organization:    ispInfo.RawISPInfo.Org,
 		},
-		GradeData: record.GradeData,
-		ChartData: record.ChartData,
-		Latency:   record.LatencyUnderload,
+		Grade:   grade,
+		Latency: record.LatencyUnderload,
+		ChartJS: chartJS,
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -352,11 +376,12 @@ const viewTemplate = `
         <div class="grade-section">
             <h2>Performance Grade</h2>
             <div class="grade-display">
-                <div class="grade-letter grade-a">A</div>
+                <div class="grade-letter grade-{{ .Grade.Grade | lower }}">{{ .Grade.Grade }}</div>
+                {{ if .Latency }}
                 <div class="grade-details">
-                    <p>Excellent connection quality</p>
-                    <p>Latency underload: {{ .Latency }}ms</p>
+                    <p>Latency under load: {{ .Latency }} ms</p>
                 </div>
+                {{ end }}
             </div>
         </div>
 
@@ -412,19 +437,26 @@ const viewTemplate = `
             drawChart();
         }
 
+        const chartData = {{ .ChartJS }};
+        const dlData = (chartData && chartData.dl) ? chartData.dl : [];
+        const ulData = (chartData && chartData.ul) ? chartData.ul : [];
+
         function drawChart() {
             const width = canvas.width;
             const height = canvas.height;
             const padding = 40;
 
-            // Clear canvas
             ctx.fillStyle = '#07090f';
             ctx.fillRect(0, 0, width, height);
 
-            // Draw grid
+            // Compute scale
+            const allPoints = dlData.concat(ulData);
+            const maxT = allPoints.reduce((m, p) => Math.max(m, p.t), 1);
+            const maxV = allPoints.reduce((m, p) => Math.max(m, p.v), 1);
+
+            // Grid
             ctx.strokeStyle = '#181a20';
             ctx.lineWidth = 1;
-
             for (let i = 0; i <= 5; i++) {
                 const y = padding + (height - 2 * padding) * i / 5;
                 ctx.beginPath();
@@ -433,32 +465,22 @@ const viewTemplate = `
                 ctx.stroke();
             }
 
-            // Sample data (will be replaced with real data)
-            const dlData = [{t: 0, v: 50}, {t: 2, v: 80}, {t: 4, v: 95}, {t: 6, v: 100}];
-            const ulData = [{t: 0, v: 30}, {t: 2, v: 45}, {t: 4, v: 60}, {t: 6, v: 65}];
+            function drawLine(data, color) {
+                if (!data.length) return;
+                ctx.strokeStyle = color;
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                data.forEach((point, i) => {
+                    const x = padding + (point.t / maxT) * (width - 2 * padding);
+                    const y = height - padding - (point.v / maxV) * (height - 2 * padding);
+                    if (i === 0) ctx.moveTo(x, y);
+                    else ctx.lineTo(x, y);
+                });
+                ctx.stroke();
+            }
 
-            // Draw download line (cyan)
-            ctx.strokeStyle = '#22d3ee';
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            dlData.forEach((point, i) => {
-                const x = padding + (point.t / 6) * (width - 2 * padding);
-                const y = height - padding - (point.v / 100) * (height - 2 * padding);
-                if (i === 0) ctx.moveTo(x, y);
-                else ctx.lineTo(x, y);
-            });
-            ctx.stroke();
-
-            // Draw upload line (purple)
-            ctx.strokeStyle = '#a78bfa';
-            ctx.beginPath();
-            ulData.forEach((point, i) => {
-                const x = padding + (point.t / 6) * (width - 2 * padding);
-                const y = height - padding - (point.v / 100) * (height - 2 * padding);
-                if (i === 0) ctx.moveTo(x, y);
-                else ctx.lineTo(x, y);
-            });
-            ctx.stroke();
+            drawLine(dlData, '#22d3ee');
+            drawLine(ulData, '#a78bfa');
         }
 
         window.addEventListener('resize', resizeCanvas);

@@ -1,16 +1,17 @@
 package results
 
 import (
+	"crypto/sha256"
 	"html/template"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/go-chi/render"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/gorilla/securecookie"
 	"github.com/gorilla/sessions"
 	"github.com/librespeed/speedtest-go/config"
 	"github.com/librespeed/speedtest-go/database"
@@ -157,16 +158,22 @@ func (f SearchFilters) matches(d schema.TelemetryData) bool {
 }
 
 var (
-	key   = []byte(securecookie.GenerateRandomKey(32))
-	store = sessions.NewCookieStore(key)
+	store     *sessions.CookieStore
+	storeOnce sync.Once
 )
 
-func init() {
-	store.Options = &sessions.Options{
-		MaxAge:   3600 * 1, // 1 hour
-		HttpOnly: true,
-		SameSite: http.SameSiteStrictMode,
-	}
+func initStore(conf *config.Config) {
+	storeOnce.Do(func() {
+		// Derive a stable 32-byte key from the stats password so sessions
+		// survive process restarts (a random key would invalidate all sessions).
+		h := sha256.Sum256([]byte("speedtest-stats:" + conf.StatsPassword))
+		store = sessions.NewCookieStore(h[:])
+		store.Options = &sessions.Options{
+			MaxAge:   3600,
+			HttpOnly: true,
+			SameSite: http.SameSiteStrictMode,
+		}
+	})
 }
 
 func Stats(w http.ResponseWriter, r *http.Request) {
@@ -174,6 +181,7 @@ func Stats(w http.ResponseWriter, r *http.Request) {
 	// A package-level var would snapshot the config at import time (BEFORE main()
 	// loads settings.toml), freezing the defaults.
 	conf := config.LoadedConfig()
+	initStore(conf)
 	store.Options.Path = conf.BaseURL + "/stats"
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -554,23 +562,25 @@ const statsTemplate = `<!DOCTYPE html>
 		.badge-filtered {
 			background: rgba(251, 191, 36, 0.3);
 		}
-		}
 
 		.logout-btn {
 			padding: 0.5rem 1.2rem;
-			background: transparent;
-			color: rgba(255, 255, 255, 0.85);
-			border: 1px solid rgba(255, 255, 255, 0.5);
-			border-radius: 6px;
+			background: rgba(255, 255, 255, 0.9);
+			color: #4a5568;
+			border: none;
+			border-radius: 8px;
 			cursor: pointer;
-			font-size: 0.9rem;
-			transition: background 0.2s, border-color 0.2s, color 0.2s;
+			font-size: 0.875rem;
+			font-weight: 600;
+			letter-spacing: 0.02em;
+			box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+			transition: background 0.2s, color 0.2s, box-shadow 0.2s;
 		}
 
 		.logout-btn:hover {
-			background: rgba(255, 255, 255, 0.15);
-			border-color: rgba(255, 255, 255, 0.85);
-			color: white;
+			background: #fff;
+			color: #e53e3e;
+			box-shadow: 0 2px 6px rgba(0,0,0,0.25);
 		}
 
 		.results-grid {

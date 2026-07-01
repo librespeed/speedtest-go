@@ -189,7 +189,7 @@ func Record(w http.ResponseWriter, r *http.Request) {
 	logs := r.FormValue("log")
 	extra := r.FormValue("extra")
 
-	if config.LoadedConfig().RedactIP {
+	if conf.RedactIP {
 		ipAddr  = "0.0.0.0"
 		ispInfo = ipv4Regex.ReplaceAllString(ispInfo, "0.0.0.0")
 		logs    = ipv4Regex.ReplaceAllString(logs, "0.0.0.0")
@@ -215,6 +215,10 @@ func Record(w http.ResponseWriter, r *http.Request) {
 	record.Jitter = jitter
 	record.Log = logs
 	record.ClientID = r.FormValue("client_id")
+	record.GradeData = r.FormValue("grade_data")
+	record.ChartData = r.FormValue("chart_data")
+	record.LatencyUnderload = r.FormValue("latency_underload")
+	record.PingDuringTest = r.FormValue("ping_during_test")
 
 	t := time.Now()
 	entropy := ulid.Monotonic(rand.New(rand.NewSource(t.UnixNano())), 0)

@@ -39,43 +39,57 @@ func Open(hostname, username, password, database, port string) *MSSQL {
 	return &MSSQL{db: conn}
 }
 
+func msScan(row interface{ Scan(...any) error }, record *schema.TelemetryData) error {
+	var id int64
+	return row.Scan(&id, &record.Timestamp, &record.IPAddress, &record.ISPInfo, &record.Extra,
+		&record.UserAgent, &record.Language, &record.Download, &record.Upload,
+		&record.Ping, &record.Jitter, &record.Log, &record.UUID,
+		&record.GradeData, &record.ChartData, &record.LatencyUnderload,
+		&record.PingDuringTest, &record.ClientID)
+}
+
 func (p *MSSQL) Insert(data *schema.TelemetryData) error {
-	stmt := `INSERT INTO speedtest_users (ip, ispinfo, extra, ua, lang, dl, ul, ping, jitter, log, uuid) 
-	         VALUES (@p1, @p2, @p3, @p4, @p5, @p6, @p7, @p8, @p9, @p10, @p11);`
-	_, err := p.db.Exec(stmt,
+	_, err := p.db.Exec(
+		`INSERT INTO speedtest_users
+			(ip, ispinfo, extra, ua, lang, dl, ul, ping, jitter, log, uuid,
+			 grade_data, chart_data, latency_underload, ping_during_test, client_id)
+			VALUES (@p1,@p2,@p3,@p4,@p5,@p6,@p7,@p8,@p9,@p10,@p11,@p12,@p13,@p14,@p15,@p16)`,
 		data.IPAddress, data.ISPInfo, data.Extra, data.UserAgent, data.Language,
-		data.Download, data.Upload, data.Ping, data.Jitter, data.Log, data.UUID)
+		data.Download, data.Upload, data.Ping, data.Jitter, data.Log, data.UUID,
+		data.GradeData, data.ChartData, data.LatencyUnderload, data.PingDuringTest, data.ClientID)
 	return err
 }
 
 func (p *MSSQL) FetchByUUID(uuid string) (*schema.TelemetryData, error) {
 	var record schema.TelemetryData
-	row := p.db.QueryRow(`SELECT * FROM speedtest_users WHERE uuid = @p1`, uuid)
-	if row != nil {
-		var id int64
-		if err := row.Scan(&id, &record.Timestamp, &record.IPAddress, &record.ISPInfo, &record.Extra, &record.UserAgent, &record.Language, &record.Download, &record.Upload, &record.Ping, &record.Jitter, &record.Log, &record.UUID); err != nil {
-			return nil, fmt.Errorf("mssql fetch by uuid: %w", err)
-		}
+	row := p.db.QueryRow(
+		`SELECT id, timestamp, ip, ispinfo, extra, ua, lang, dl, ul, ping, jitter, log, uuid,
+			COALESCE(grade_data,''), COALESCE(chart_data,''), COALESCE(latency_underload,''),
+			COALESCE(ping_during_test,''), COALESCE(client_id,'')
+		FROM speedtest_users WHERE uuid = @p1`, uuid)
+	if err := msScan(row, &record); err != nil {
+		return nil, fmt.Errorf("mssql fetch by uuid: %w", err)
 	}
 	return &record, nil
 }
 
 func (p *MSSQL) FetchLast100() ([]schema.TelemetryData, error) {
-	var records []schema.TelemetryData
-	rows, err := p.db.Query(`SELECT TOP 100 * FROM speedtest_users ORDER BY timestamp DESC;`)
+	rows, err := p.db.Query(
+		`SELECT TOP 100 id, timestamp, ip, ispinfo, extra, ua, lang, dl, ul, ping, jitter, log, uuid,
+			COALESCE(grade_data,''), COALESCE(chart_data,''), COALESCE(latency_underload,''),
+			COALESCE(ping_during_test,''), COALESCE(client_id,'')
+		FROM speedtest_users ORDER BY timestamp DESC`)
 	if err != nil {
 		return nil, fmt.Errorf("mssql fetch last 100: %w", err)
 	}
-	if rows != nil {
-		defer rows.Close()
-		for rows.Next() {
-			var record schema.TelemetryData
-			var id int64
-			if err := rows.Scan(&id, &record.Timestamp, &record.IPAddress, &record.ISPInfo, &record.Extra, &record.UserAgent, &record.Language, &record.Download, &record.Upload, &record.Ping, &record.Jitter, &record.Log, &record.UUID); err != nil {
-				return nil, fmt.Errorf("mssql scan row: %w", err)
-			}
-			records = append(records, record)
+	defer rows.Close()
+	var records []schema.TelemetryData
+	for rows.Next() {
+		var record schema.TelemetryData
+		if err := msScan(rows, &record); err != nil {
+			return nil, fmt.Errorf("mssql scan row: %w", err)
 		}
+		records = append(records, record)
 	}
 	return records, nil
 }
@@ -84,21 +98,23 @@ func (p *MSSQL) FetchAll(offset, limit int) ([]schema.TelemetryData, error) {
 	if limit <= 0 {
 		limit = 50
 	}
-	var records []schema.TelemetryData
-	rows, err := p.db.Query(`SELECT * FROM speedtest_users ORDER BY timestamp DESC OFFSET @p1 ROWS FETCH NEXT @p2 ROWS ONLY;`, offset, limit)
+	rows, err := p.db.Query(
+		`SELECT id, timestamp, ip, ispinfo, extra, ua, lang, dl, ul, ping, jitter, log, uuid,
+			COALESCE(grade_data,''), COALESCE(chart_data,''), COALESCE(latency_underload,''),
+			COALESCE(ping_during_test,''), COALESCE(client_id,'')
+		FROM speedtest_users ORDER BY timestamp DESC OFFSET @p1 ROWS FETCH NEXT @p2 ROWS ONLY`,
+		offset, limit)
 	if err != nil {
 		return nil, fmt.Errorf("mssql fetch all: %w", err)
 	}
-	if rows != nil {
-		defer rows.Close()
-		for rows.Next() {
-			var record schema.TelemetryData
-			var id int64
-			if err := rows.Scan(&id, &record.Timestamp, &record.IPAddress, &record.ISPInfo, &record.Extra, &record.UserAgent, &record.Language, &record.Download, &record.Upload, &record.Ping, &record.Jitter, &record.Log, &record.UUID); err != nil {
-				return nil, fmt.Errorf("mssql scan row: %w", err)
-			}
-			records = append(records, record)
+	defer rows.Close()
+	var records []schema.TelemetryData
+	for rows.Next() {
+		var record schema.TelemetryData
+		if err := msScan(rows, &record); err != nil {
+			return nil, fmt.Errorf("mssql scan row: %w", err)
 		}
+		records = append(records, record)
 	}
 	return records, nil
 }
