@@ -3,6 +3,7 @@ package web
 import (
 	"embed"
 	"encoding/json"
+	"errors"
 	"io"
 	"io/fs"
 	"io/ioutil"
@@ -11,6 +12,8 @@ import (
 	"os"
 	"regexp"
 	"strconv"
+	"strings"
+	"syscall"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -70,6 +73,7 @@ func ListenAndServe(conf *config.Config) error {
 	r.Get(conf.BaseURL+"/backend/garbage", garbage)
 	r.Get(conf.BaseURL+"/getIP", getIP)
 	r.Get(conf.BaseURL+"/backend/getIP", getIP)
+	r.Get(conf.BaseURL+"/results/view", results.ViewPage)
 	r.Get(conf.BaseURL+"/results", results.DrawPNG)
 	r.Get(conf.BaseURL+"/results/", results.DrawPNG)
 	r.Get(conf.BaseURL+"/backend/results", results.DrawPNG)
@@ -96,8 +100,40 @@ func ListenAndServe(conf *config.Config) error {
 	r.Get(conf.BaseURL+"/backend/results/json.php", results.JSONResult)
 
 	go listenProxyProtocol(conf, r)
+	go listenRedirect(conf)
 
 	return startListener(conf, r)
+}
+
+func listenRedirect(conf *config.Config) {
+	if conf.RedirectPort == "" || conf.RedirectPort == "0" {
+		return
+	}
+	scheme := "http"
+	if conf.EnableTLS {
+		scheme = "https"
+	}
+	addr := net.JoinHostPort(conf.BindAddress, conf.RedirectPort)
+	log.Infof("Starting HTTP→%s redirect listener on %s", strings.ToUpper(scheme), addr)
+	targetPort := conf.Port
+	standardPort := map[string]string{"http": "80", "https": "443"}
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		host := r.Host
+		// Strip any port from the incoming Host header
+		if h, _, err := net.SplitHostPort(host); err == nil {
+			host = h
+		}
+		// Only append port when it's non-standard for the target scheme
+		if targetPort != "" && targetPort != standardPort[scheme] {
+			host = net.JoinHostPort(host, targetPort)
+		}
+		url := scheme + "://" + host + r.RequestURI
+		http.Redirect(w, r, url, http.StatusMovedPermanently)
+	})
+
+	if err := http.ListenAndServe(addr, handler); err != nil {
+		log.Errorf("HTTP redirect listener error: %s", err)
+	}
 }
 
 func listenProxyProtocol(conf *config.Config, r *chi.Mux) {
@@ -186,10 +222,33 @@ func garbage(w http.ResponseWriter, r *http.Request) {
 
 	for i := 0; i < chunks; i++ {
 		if _, err := w.Write(randomData); err != nil {
-			log.Errorf("Error writing back to client at chunk number %d: %s", i, err)
+			// Client disconnects are expected during a speed test: the browser
+			// aborts its download streams when the timed test ends. Don't spam
+			// the log for those — only surface genuinely unexpected errors.
+			if !isClientGone(err) {
+				log.Errorf("Error writing back to client at chunk number %d: %s", i, err)
+			}
 			break
 		}
 	}
+}
+
+// isClientGone reports whether err is a normal client-side disconnect (the peer
+// closed the connection / aborted the HTTP2 stream), which happens routinely
+// when a speed test finishes and is not a server error.
+func isClientGone(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, syscall.EPIPE) || errors.Is(err, syscall.ECONNRESET) {
+		return true
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "stream closed") ||
+		strings.Contains(msg, "broken pipe") ||
+		strings.Contains(msg, "connection reset by peer") ||
+		strings.Contains(msg, "client disconnected") ||
+		strings.Contains(msg, "context canceled")
 }
 
 func getIP(w http.ResponseWriter, r *http.Request) {
@@ -208,7 +267,9 @@ func getIP(w http.ResponseWriter, r *http.Request) {
 		ret.ProcessedString = clientIP + " - " + desc
 		b, _ := json.Marshal(&ret)
 		if _, err := w.Write(b); err != nil {
-			log.Errorf("Error writing to client: %s", err)
+			if !isClientGone(err) {
+				log.Errorf("Error writing to client: %s", err)
+			}
 		}
 		return
 	}

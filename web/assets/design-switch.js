@@ -30,8 +30,8 @@
         return;
     }
 
-    // Default to classic design
-    redirectToOldDesign();
+    // Default to modern design
+    redirectToNewDesign();
 
     function redirectToNewDesign() {
         const currentParams = window.location.search;

@@ -35,6 +35,8 @@ type Config struct {
 	EnableTLS   bool   `mapstructure:"enable_tls"`
 	TLSCertFile string `mapstructure:"tls_cert_file"`
 	TLSKeyFile  string `mapstructure:"tls_key_file"`
+
+	RedirectPort string `mapstructure:"redirect_from"`
 }
 
 var (

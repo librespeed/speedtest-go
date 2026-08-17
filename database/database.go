@@ -22,6 +22,8 @@ type DataAccess interface {
 	Insert(*schema.TelemetryData) error
 	FetchByUUID(string) (*schema.TelemetryData, error)
 	FetchLast100() ([]schema.TelemetryData, error)
+	FetchAll(offset, limit int) ([]schema.TelemetryData, error)
+	Count() (int, error)
 }
 
 func SetDBInfo(conf *config.Config) {

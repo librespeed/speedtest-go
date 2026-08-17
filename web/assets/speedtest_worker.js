@@ -17,6 +17,13 @@ let ulProgress = 0; //progress of upload test 0-1
 let pingProgress = 0; //progress of ping+jitter test 0-1
 let testId = null; //test ID (sent back by telemetry if used, null otherwise)
 
+// Chart data for real-time graph
+let dlChartData = []; // array of {t, v} for download
+let ulChartData = []; // array of {t, v} for upload
+let pingDuringTest = { dl: [], ul: [] }; // ping measurements during DL/UL tests
+let latencyUnderload = ""; // ping during load (ms)
+let basePing = 0; // baseline ping before load tests
+
 let log = ""; //telemetry log
 function tlog(s) {
 	if (settings.telemetry_level >= 2) {
@@ -39,11 +46,11 @@ function twarn(s) {
 let settings = {
 	mpot: false, //set to true when in MPOT mode
 	test_order: "IP_D_U", //order in which tests will be performed as a string. D=Download, U=Upload, P=Ping+Jitter, I=IP, _=1 second delay
-	time_ul_max: 15, // max duration of upload test in seconds
-	time_dl_max: 15, // max duration of download test in seconds
+	time_ul_max: 20, // max duration of upload test in seconds
+	time_dl_max: 20, // max duration of download test in seconds
 	time_auto: true, // if set to true, tests will take less time on faster connections
-	time_ulGraceTime: 3, //time to wait in seconds before actually measuring ul speed (wait for buffers to fill)
-	time_dlGraceTime: 1.5, //time to wait in seconds before actually measuring dl speed (wait for TCP window to increase)
+	time_ulGraceTime: 2, //time to wait in seconds before actually measuring ul speed (wait for buffers to fill)
+	time_dlGraceTime: 2, //time to wait in seconds before actually measuring dl speed (wait for TCP window to increase)
 	count_ping: 10, // number of pings to perform in ping test
 	url_dl: "backend/garbage.php", // path to a large file or garbage.php, used for download test. must be relative to this js file
 	url_ul: "backend/empty.php", // path to an empty file, used for upload test. must be relative to this js file
@@ -52,7 +59,7 @@ let settings = {
 	getIp_ispInfo: true, //if set to true, the server will include ISP info with the IP address
 	getIp_ispInfo_distance: "km", //km or mi=estimate distance from server in km/mi; set to false to disable distance estimation. getIp_ispInfo must be enabled in order for this to work
 	xhr_dlMultistream: 6, // number of download streams to use (can be different if enable_quirks is active)
-	xhr_ulMultistream: 3, // number of upload streams to use (can be different if enable_quirks is active)
+	xhr_ulMultistream: 6, // number of upload streams to use (can be different if enable_quirks is active)
 	xhr_multistreamDelay: 300, //how much concurrent requests should be delayed
 	xhr_ignoreErrors: 1, // 0=fail on errors, 1=attempt to restart a stream if it fails, 2=ignore all errors
 	xhr_dlUseBlob: false, // if set to true, it reduces ram usage but uses the hard drive (useful with large garbagePhp_chunkSize and/or high xhr_dlMultistream)
@@ -65,7 +72,8 @@ let settings = {
 	telemetry_level: 0, // 0=disabled, 1=basic (results only), 2=full (results and timing) 3=debug (results+log)
 	url_telemetry: "results/telemetry.php", // path to the script that adds telemetry data to the database
 	telemetry_extra: "", //extra data that can be passed to the telemetry through the settings
-    forceIE11Workaround: false //when set to true, it will force the IE11 upload test on all browsers. Debug only
+    forceIE11Workaround: false, //when set to true, it will force the IE11 upload test on all browsers. Debug only
+	client_id: "" // stable browser-generated device identifier (clientId:fingerprint)
 };
 
 let xhr = null; // array of currently active xhr requests
@@ -102,7 +110,11 @@ this.addEventListener("message", function(e) {
 				dlProgress: dlProgress,
 				ulProgress: ulProgress,
 				pingProgress: pingProgress,
-				testId: testId
+				testId: testId,
+				dlChartData: dlChartData,
+				ulChartData: ulChartData,
+				pingDuringTest: pingDuringTest,
+				latencyUnderload: latencyUnderload
 			})
 		);
 	}
@@ -180,6 +192,15 @@ this.addEventListener("message", function(e) {
 			if (testState == 5) return;
 			if (test_pointer >= settings.test_order.length) {
 				//test is finished
+					// Calculate latency underload
+					if (pingDuringTest.dl.length > 0 || pingDuringTest.ul.length > 0) {
+						const allPings = [...pingDuringTest.dl, ...pingDuringTest.ul].filter(p => p !== null && !isNaN(p));
+						if (allPings.length > 0) {
+							const avgPingUnderload = allPings.reduce((a, b) => a + b, 0) / allPings.length;
+							const pingDiff = avgPingUnderload - basePing;
+							latencyUnderload = pingDiff > 0 ? pingDiff.toFixed(2) : "0";
+						}
+					}
 				if (settings.telemetry_level > 0)
 					sendTelemetry(function(id) {
 						testState = 4;
@@ -409,6 +430,11 @@ function dlTest(done) {
 				}
 				//update status
 				dlStatus = ((speed * 8 * settings.overheadCompensationFactor) / (settings.useMebibits ? 1048576 : 1000000)).toFixed(2); // speed is multiplied by 8 to go from bytes to bits, overhead compensation is applied, then everything is divided by 1048576 or 1000000 to go to megabits/mebibits
+			// Capture chart data point
+			const chartTime = (t - 1000 * settings.time_dlGraceTime) / 1000;
+			if (chartTime >= 0 && dlStatus !== "Fail") {
+				dlChartData.push({ t: chartTime, v: parseFloat(dlStatus) });
+			}
 				if ((t + bonusT) / 1000.0 > settings.time_dl_max || failed) {
 					// test is over, stop streams and timer
 					if (failed || isNaN(dlStatus)) dlStatus = "Fail";
@@ -416,7 +442,13 @@ function dlTest(done) {
 					clearInterval(interval);
 					dlProgress = 1;
 					tlog("dlTest: " + dlStatus + ", took " + (new Date().getTime() - startT) + "ms");
-					done();
+					// Measure ping after download for latency underload
+					measurePing(function(pingTime) {
+						if (pingTime !== null) {
+							pingDuringTest.dl.push(pingTime);
+						}
+						done();
+					});
 				}
 			}
 		}.bind(this),
@@ -557,6 +589,11 @@ function ulTest(done) {
 					}
 					//update status
 					ulStatus = ((speed * 8 * settings.overheadCompensationFactor) / (settings.useMebibits ? 1048576 : 1000000)).toFixed(2); // speed is multiplied by 8 to go from bytes to bits, overhead compensation is applied, then everything is divided by 1048576 or 1000000 to go to megabits/mebibits
+				// Capture chart data point
+				const chartTime = (t - 1000 * settings.time_ulGraceTime) / 1000;
+				if (chartTime >= 0 && ulStatus !== "Fail") {
+					ulChartData.push({ t: chartTime, v: parseFloat(ulStatus) });
+				}
 					if ((t + bonusT) / 1000.0 > settings.time_ul_max || failed) {
 						// test is over, stop streams and timer
 						if (failed || isNaN(ulStatus)) ulStatus = "Fail";
@@ -564,7 +601,13 @@ function ulTest(done) {
 						clearInterval(interval);
 						ulProgress = 1;
 						tlog("ulTest: " + ulStatus + ", took " + (new Date().getTime() - startT) + "ms");
-						done();
+						// Measure ping after upload for latency underload
+						measurePing(function(pingTime) {
+							if (pingTime !== null) {
+								pingDuringTest.ul.push(pingTime);
+							}
+							done();
+						});
 					}
 				}
 			}.bind(this),
@@ -667,6 +710,7 @@ function pingTest(done) {
 				else {
 					// more pings to do?
 					pingProgress = 1;
+					basePing = ping;
 					tlog("ping: " + pingStatus + " jitter: " + jitterStatus + ", took " + (new Date().getTime() - startT) + "ms");
 					done();
 				}
@@ -678,7 +722,37 @@ function pingTest(done) {
 	}.bind(this);
 	doPing(); // start first ping
 }
+// Simple ping measurement for latency underload
+function measurePing(callback) {
+	const startT = Date.now();
+	const xhr = new XMLHttpRequest();
+	xhr.onload = function() {
+		const pingTime = Date.now() - startT;
+		callback(pingTime);
+	};
+	xhr.onerror = function() {
+		callback(null);
+	};
+	xhr.open("GET", settings.url_ping + url_sep(settings.url_ping) + (settings.mpot ? "cors=true&" : "") + "r=" + Math.random(), true);
+	xhr.send();
+}
 // telemetry
+function computeGrade(dl, ul, ping, jitter, latencyUnderload) {
+	const dlMbps = parseFloat(dl) || 0;
+	const ulMbps = parseFloat(ul) || 0;
+	const pingMs = parseFloat(ping) || 999;
+	const jitterMs = parseFloat(jitter) || 999;
+	const latMs = parseFloat(latencyUnderload) || 0;
+	let score = 100;
+	if (dlMbps < 5) score -= 30; else if (dlMbps < 25) score -= 15; else if (dlMbps < 100) score -= 5;
+	if (ulMbps < 2) score -= 20; else if (ulMbps < 10) score -= 10; else if (ulMbps < 50) score -= 5;
+	if (pingMs > 150) score -= 20; else if (pingMs > 80) score -= 10; else if (pingMs > 40) score -= 5;
+	if (jitterMs > 50) score -= 15; else if (jitterMs > 20) score -= 8; else if (jitterMs > 10) score -= 3;
+	if (latMs > 100) score -= 10; else if (latMs > 50) score -= 5;
+	let grade = score >= 90 ? 'A' : score >= 75 ? 'B' : score >= 60 ? 'C' : score >= 45 ? 'D' : score >= 30 ? 'E' : 'F';
+	return JSON.stringify({ grade, criteria: { dl: dlMbps, ul: ulMbps, ping: pingMs, jitter: jitterMs, latencyUnderload: latMs } });
+}
+
 function sendTelemetry(done) {
 	if (settings.telemetry_level < 1) return;
 	xhr = new XMLHttpRequest();
@@ -715,9 +789,27 @@ function sendTelemetry(done) {
 		fd.append("jitter", jitterStatus);
 		fd.append("log", settings.telemetry_level > 1 ? log : "");
 		fd.append("extra", settings.telemetry_extra);
+		fd.append("client_id", settings.client_id);
+		const gradeData = computeGrade(dlStatus, ulStatus, pingStatus, jitterStatus, latencyUnderload);
+		fd.append("grade_data", gradeData);
+		fd.append("chart_data", JSON.stringify({ dl: dlChartData, ul: ulChartData }));
+		fd.append("latency_underload", latencyUnderload);
+		fd.append("ping_during_test", JSON.stringify(pingDuringTest));
 		xhr.send(fd);
 	} catch (ex) {
-		const postData = "extra=" + encodeURIComponent(settings.telemetry_extra) + "&ispinfo=" + encodeURIComponent(JSON.stringify(telemetryIspInfo)) + "&dl=" + encodeURIComponent(dlStatus) + "&ul=" + encodeURIComponent(ulStatus) + "&ping=" + encodeURIComponent(pingStatus) + "&jitter=" + encodeURIComponent(jitterStatus) + "&log=" + encodeURIComponent(settings.telemetry_level > 1 ? log : "");
+		const gradeData = computeGrade(dlStatus, ulStatus, pingStatus, jitterStatus, latencyUnderload);
+		const postData = "extra=" + encodeURIComponent(settings.telemetry_extra)
+			+ "&ispinfo=" + encodeURIComponent(JSON.stringify(telemetryIspInfo))
+			+ "&dl=" + encodeURIComponent(dlStatus)
+			+ "&ul=" + encodeURIComponent(ulStatus)
+			+ "&ping=" + encodeURIComponent(pingStatus)
+			+ "&jitter=" + encodeURIComponent(jitterStatus)
+			+ "&log=" + encodeURIComponent(settings.telemetry_level > 1 ? log : "")
+			+ "&client_id=" + encodeURIComponent(settings.client_id)
+			+ "&grade_data=" + encodeURIComponent(gradeData)
+			+ "&chart_data=" + encodeURIComponent(JSON.stringify({ dl: dlChartData, ul: ulChartData }))
+			+ "&latency_underload=" + encodeURIComponent(latencyUnderload)
+			+ "&ping_during_test=" + encodeURIComponent(JSON.stringify(pingDuringTest));
 		xhr.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
 		xhr.send(postData);
 	}

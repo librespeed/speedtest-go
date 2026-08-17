@@ -1,16 +1,1567 @@
 <!DOCTYPE html>
-<html>
-
+<html lang="en">
 <head>
-    <link rel="shortcut icon" href="favicon.ico">
-    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no, user-scalable=no" />
-    <meta charset="UTF-8" />
-    <script type="text/javascript" src="design-switch.js"></script>
-    <title>LibreSpeed</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+  <link rel="shortcut icon" href="images/favicon.svg" />
+  <script src="speedtest.js"></script>
+  <link rel="stylesheet" href="styling/fonts.css" />
+  <title>LibreSpeed</title>
+  <!-- prevent flash of wrong theme -->
+  <script>(function(){var t=localStorage.getItem('ls-theme');if(t)document.documentElement.setAttribute('data-theme',t);})();</script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #07090f;
+      --panel:    #0d1120;
+      --border:   rgba(255,255,255,0.07);
+      --text:     #eef2ff;
+      --muted:    rgba(238,242,255,0.38);
+      --dim:      rgba(238,242,255,0.13);
+      --dl:       #22d3ee;
+      --ul:       #a78bfa;
+      --ping:     #34d399;
+      --jitter:   #fbbf24;
+      /* canvas gauge colors (read from JS) */
+      --c-track:    rgba(255,255,255,0.07);
+      --c-tick-maj: rgba(255,255,255,0.32);
+      --c-tick-min: rgba(255,255,255,0.10);
+      --c-tick-lbl: rgba(255,255,255,0.38);
+      --c-num:      #ffffff;
+      --c-num-0:    rgba(255,255,255,0.22);
+      /* component helpers */
+      --card-bg:  rgba(255,255,255,0.03);
+      --input-bg: rgba(255,255,255,0.05);
+      --hover-bg: rgba(255,255,255,0.06);
+      --btn-glow: rgba(34,211,238,0.28);
+      --btn-glow2:rgba(34,211,238,0.45);
+      --grad-1:   rgba(34,211,238,0.07);
+      --grad-2:   rgba(167,139,250,0.09);
+    }
+
+    /* ── light theme ── */
+    [data-theme="light"] {
+      --bg:       #e8eaf2;
+      --panel:    #f4f5fa;
+      --border:   rgba(0,0,0,0.08);
+      --text:     #0f172a;
+      --muted:    rgba(15,23,42,0.52);
+      --dim:      rgba(15,23,42,0.28);
+      --dl:       #0891b2;
+      --ul:       #7c3aed;
+      --ping:     #059669;
+      --jitter:   #b45309;
+      --c-track:    rgba(0,0,0,0.08);
+      --c-tick-maj: rgba(0,0,0,0.35);
+      --c-tick-min: rgba(0,0,0,0.12);
+      --c-tick-lbl: rgba(0,0,0,0.45);
+      --c-num:      #0f172a;
+      --c-num-0:    rgba(15,23,42,0.20);
+      --card-bg:  rgba(0,0,0,0.03);
+      --input-bg: rgba(0,0,0,0.04);
+      --hover-bg: rgba(0,0,0,0.05);
+      --btn-glow: rgba(8,145,178,0.22);
+      --btn-glow2:rgba(8,145,178,0.38);
+      --grad-1:   rgba(34,211,238,0.10);
+      --grad-2:   rgba(167,139,250,0.10);
+    }
+
+    html { background: var(--bg); min-height: 100%; overflow-x: hidden; }
+
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      color: var(--text);
+      min-height: 100vh;
+      overflow-x: hidden;
+      display: flex;
+      flex-direction: column;
+      background:
+        radial-gradient(ellipse 100% 50% at 30% -5%,  var(--grad-1) 0%, transparent 55%),
+        radial-gradient(ellipse  70% 40% at 80% 110%, var(--grad-2) 0%, transparent 50%),
+        var(--bg);
+    }
+
+    /* ── header ── */
+    header {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1.5rem 2rem;
+    }
+    header img {
+      height: 2rem;
+      opacity: 0.8;
+      transition: opacity 0.2s;
+    }
+    [data-theme="light"] header img {
+      background: rgba(7, 9, 15, 0.82);
+      padding: 0.3rem 0.7rem;
+      border-radius: 0.45rem;
+    }
+
+    /* ── main ── */
+    main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 3rem 2rem 4rem;
+      gap: 2.8rem;
+    }
+
+    /* ── gauges ── */
+    .gauges {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.8rem 2rem;
+      width: 100%;
+      max-width: 880px;
+    }
+    .gauge-wrap { display: flex; justify-content: center; }
+    .gauge-wrap canvas {
+      width: 100%;
+      max-width: 360px;
+      aspect-ratio: 1.45 / 1;
+      display: block;
+      min-width: 0;
+    }
+    .gauge-wrap.sm canvas { max-width: 280px; }
+
+    /* ── controls ── */
+    .controls {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 1rem;
+    }
+    #ip-info {
+      font-size: 1.2rem;
+      color: var(--muted);
+      min-height: 1.8rem;
+      text-align: center;
+    }
+    #ip-info strong { color: var(--text); }
+
+    #btn-start {
+      font-family: 'Inter', sans-serif;
+      font-size: 1.4rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: #07090f;
+      background: var(--dl);
+      border: none;
+      border-radius: 100px;
+      padding: 1.3rem 5.5rem;
+      cursor: pointer;
+      transition: transform 0.15s, box-shadow 0.2s, background 0.2s;
+      box-shadow: 0 0 28px var(--btn-glow), 0 2px 8px rgba(0,0,0,0.3);
+    }
+    #btn-start:hover:not(:disabled) {
+      transform: translateY(-2px) scale(1.02);
+      box-shadow: 0 0 44px var(--btn-glow2), 0 4px 16px rgba(0,0,0,0.4);
+    }
+    #btn-start:active:not(:disabled) { transform: scale(0.97); }
+    #btn-start.abort {
+      background: #f87171;
+      box-shadow: 0 0 28px rgba(248,113,113,0.35);
+    }
+    #btn-start:disabled { opacity: 0.35; cursor: default; }
+
+    /* ── results ── */
+    #results {
+      width: 100%;
+      max-width: 880px;
+      display: none;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 1.2rem;
+      animation: slide-up 0.45s cubic-bezier(0.16,1,0.3,1);
+    }
+    #results.visible { display: grid; }
+    @keyframes slide-up {
+      from { opacity: 0; transform: translateY(16px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .r-card {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.3rem;
+      padding: 1.6rem 1rem 1.4rem;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 1rem;
+    }
+    .r-val {
+      font-size: 3rem;
+      font-weight: 200;
+      letter-spacing: -0.03em;
+      font-variant-numeric: tabular-nums;
+      line-height: 1;
+    }
+    .r-label {
+      font-size: 0.95rem;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-top: 0.2rem;
+    }
+    .r-unit { font-size: 0.95rem; color: var(--dim); }
+    [data-m=dl]     .r-val { color: var(--dl); }
+    [data-m=ul]     .r-val { color: var(--ul); }
+    [data-m=ping]   .r-val { color: var(--ping); }
+    [data-m=jitter] .r-val { color: var(--jitter); }
+    /* loss: color set dynamically by JS based on value */
+
+    /* ── share button ── */
+    #btn-share {
+      font-family: 'Inter', sans-serif;
+      font-size: 1.2rem;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--dl);
+      background: transparent;
+      border: 1px solid var(--dl);
+      border-radius: 100px;
+      padding: 0.8rem 2.5rem;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    #btn-share:hover { background: rgba(34,211,238,0.08); }
+
+    /* ── share dialog ── */
+    dialog {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 1.2rem;
+      color: var(--text);
+      width: min(92vw, 560px);
+      padding: 2.8rem 2.8rem 2.4rem;
+      margin: auto;
+    }
+    dialog::backdrop { background: rgba(0,0,0,0.75); backdrop-filter: blur(6px); }
+    dialog:not([open]) { display: none; }
+    dialog[open] {
+      display: flex;
+      flex-direction: column;
+      gap: 1.6rem;
+      animation: pop-in 0.22s cubic-bezier(0.16,1,0.3,1);
+    }
+    @keyframes pop-in {
+      from { opacity: 0; transform: scale(0.93); }
+      to   { opacity: 1; transform: scale(1); }
+    }
+    dialog h2 {
+      font-size: 1.8rem;
+      font-weight: 300;
+      letter-spacing: -0.02em;
+      color: var(--text);
+    }
+    .close-x {
+      position: absolute;
+      top: 1.4rem; right: 1.4rem;
+      background: none;
+      border: none;
+      color: var(--muted);
+      font-size: 1.6rem;
+      cursor: pointer;
+      line-height: 1;
+      padding: 0.4rem;
+      border-radius: 50%;
+      transition: color 0.15s, background 0.15s;
+    }
+    .close-x:hover { color: var(--text); background: var(--hover-bg); }
+    dialog img {
+      width: 100%;
+      border-radius: 0.8rem;
+      border: 1px solid var(--border);
+      display: block;
+    }
+    .share-row {
+      display: flex;
+      gap: 0.8rem;
+    }
+    .share-row input {
+      flex: 1;
+      background: var(--input-bg);
+      border: 1px solid var(--border);
+      border-radius: 0.6rem;
+      color: var(--muted);
+      font-family: 'Inter', monospace;
+      font-size: 1.1rem;
+      padding: 0.7rem 1rem;
+      outline: none;
+    }
+    .share-row button {
+      font-family: 'Inter', sans-serif;
+      font-size: 1.2rem;
+      font-weight: 600;
+      color: #07090f;
+      background: var(--dl);
+      border: none;
+      border-radius: 0.6rem;
+      padding: 0.7rem 1.6rem;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: opacity 0.15s;
+    }
+    .share-row button:hover { opacity: 0.85; }
+
+    /* ── responsive ── */
+    @media (max-width: 700px) {
+      header { padding: 1rem 1.2rem; }
+      main { padding: 1.5rem 0.8rem 2.5rem; gap: 1.8rem; }
+      .gauges {
+        gap: 0.4rem 0.6rem;
+        max-width: 100%;
+      }
+      .gauge-wrap canvas { max-width: 100%; }
+      .gauge-wrap.sm canvas { max-width: 100%; }
+      #results { grid-template-columns: repeat(2, 1fr); gap: 0.7rem; }
+      #results [data-m=loss] { grid-column: 1 / -1; }
+      .r-card { padding: 1.2rem 0.6rem 1rem; }
+      .r-val { font-size: 2.4rem; }
+      .r-label { font-size: 0.8rem; }
+      .r-unit { font-size: 0.8rem; }
+      #btn-start { font-size: 1.2rem; padding: 1.1rem 4rem; }
+    }
+
+    @media (max-width: 420px) {
+      .gauges { gap: 0.3rem; }
+      .r-val { font-size: 2rem; }
+      #ip-info { font-size: 1rem; }
+    }
+
+    /* ── speed chart ── */
+    #chart-section {
+      display: none;
+      width: 100%;
+      max-width: 880px;
+      animation: slide-up 0.45s cubic-bezier(0.16,1,0.3,1);
+    }
+    #chart-section.visible { display: block; }
+    #speed-chart {
+      width: 100%;
+      aspect-ratio: 4 / 1;
+      display: block;
+      border-radius: 1rem;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+    }
+
+    /* ── buffer bloat ── */
+    #bloat-section {
+      display: none;
+      width: 100%;
+      max-width: 880px;
+      animation: slide-up 0.45s cubic-bezier(0.16,1,0.3,1);
+    }
+    #bloat-section.visible { display: block; }
+    .bloat-card {
+      display: flex;
+      align-items: center;
+      gap: 2.2rem;
+      padding: 1.6rem 2.2rem;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 1rem;
+    }
+    .bloat-grade-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.3rem;
+      flex-shrink: 0;
+      min-width: 4rem;
+    }
+    #b-grade {
+      font-size: 3.4rem;
+      font-weight: 200;
+      line-height: 1;
+      letter-spacing: -0.04em;
+    }
+    #b-grade-desc {
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    .bloat-div {
+      width: 1px;
+      height: 4.5rem;
+      background: var(--border);
+      flex-shrink: 0;
+    }
+    .bloat-hdr {
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 0.55rem;
+    }
+    .bloat-metrics { flex: 1; }
+    .bm-row {
+      display: flex;
+      align-items: baseline;
+      gap: 0.5rem;
+      line-height: 1.9;
+    }
+    .bm-key {
+      font-size: 0.88rem;
+      color: var(--muted);
+      flex: 1;
+      white-space: nowrap;
+    }
+    .bm-val {
+      font-size: 1.15rem;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+      color: var(--text);
+    }
+    .bm-ms { font-size: 0.78rem; color: var(--dim); }
+    .bm-delta {
+      font-size: 0.82rem;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+      min-width: 4.5rem;
+      text-align: right;
+    }
+    .bm-delta.pos  { color: #f87171; }
+    .bm-delta.zero { color: var(--dim); }
+
+    @media (max-width: 700px) {
+      .bloat-card { gap: 1.2rem; padding: 1.2rem 1rem; flex-wrap: wrap; }
+      .bloat-div  { width: 100%; height: 1px; }
+      .bloat-grade-wrap { flex-direction: row; gap: 0.8rem; min-width: unset; }
+      #b-grade { font-size: 2.6rem; }
+    }
+
+    /* ── test history ── */
+    #history-section {
+      display: none;
+      width: 100%;
+      max-width: 880px;
+    }
+    #history-section.visible { display: block; }
+    .history-hdr {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 0.65rem;
+    }
+    .history-hdr-title {
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    #btn-clear-history {
+      font-family: 'Inter', sans-serif;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--muted);
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: 100px;
+      padding: 0.18rem 0.7rem;
+      cursor: pointer;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    #btn-clear-history:hover { color: var(--text); border-color: var(--muted); }
+    .history-wrap {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 1rem;
+      overflow: hidden;
+    }
+    .history-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    .history-table th {
+      padding: 0.6rem 1rem;
+      text-align: left;
+      font-size: 0.70rem;
+      font-weight: 700;
+      letter-spacing: 0.10em;
+      text-transform: uppercase;
+      color: var(--dim);
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+    .history-table td {
+      padding: 0.65rem 1rem;
+      font-size: 0.92rem;
+      font-variant-numeric: tabular-nums;
+      color: var(--text);
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+    .history-table tbody tr:last-child td { border-bottom: none; }
+    .history-table td em { font-style: normal; font-size: 0.78rem; color: var(--dim); margin-left: 0.15rem; }
+    .hr-new td { background: var(--hover-bg); }
+    .hr-date  { color: var(--muted) !important; font-size: 0.85rem !important; }
+    .hr-dl    { color: var(--dl);     }
+    .hr-ul    { color: var(--ul);     }
+    .hr-ping  { color: var(--ping);   }
+    .hr-jitter{ color: var(--jitter); }
+    .hr-bloat-Ap, .hr-bloat-A { color: var(--ping); font-weight: 700; }
+    .hr-bloat-B  { color: var(--jitter); font-weight: 700; }
+    .hr-bloat-C, .hr-bloat-D, .hr-bloat-F { color: #f87171; font-weight: 700; }
+    .hr-loss-bad { color: #f87171; }
+    .hr-share { padding: 0.3rem !important; }
+    .share-btn {
+      padding: 0.4rem 0.8rem;
+      font-size: 0.75rem;
+      background: rgba(34, 211, 238, 0.1);
+      color: var(--dl);
+      border: 1px solid rgba(34, 211, 238, 0.3);
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-weight: 600;
+    }
+    .share-btn:hover {
+      background: rgba(34, 211, 238, 0.2);
+      border-color: rgba(34, 211, 238, 0.5);
+      transform: translateY(-1px);
+    }
+    @media (max-width: 700px) {
+      .history-wrap { overflow-x: auto; }
+      .history-table { min-width: 530px; }
+      .history-table th, .history-table td { padding: 0.55rem 0.7rem; }
+    }
+
+    /* ── theme toggle (top-right of header) ── */
+    .theme-switch {
+      position: absolute;
+      right: 1.5rem;
+      top: 50%;
+      transform: translateY(-50%);
+      display: flex;
+      align-items: center;
+      cursor: pointer;
+      user-select: none;
+    }
+    .pill {
+      width: 2.4rem;
+      height: 1.3rem;
+      background: rgba(255,255,255,0.14);
+      border-radius: 100px;
+      position: relative;
+      transition: background 0.25s;
+    }
+    [data-theme="light"] .pill { background: var(--dl); }
+    .dot {
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 0.85rem;
+      height: 0.85rem;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.75);
+      transition: transform 0.25s cubic-bezier(0.34,1.4,0.64,1);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    }
+    [data-theme="light"] .dot {
+      transform: translateX(1.1rem);
+      background: #ffffff;
+    }
+  </style>
 </head>
-
 <body>
-    <p>Loading...</p>
-</body>
 
+<header>
+  <img src="images/logo.svg" alt="LibreSpeed" />
+  <label class="theme-switch" title="Toggle dark / light theme">
+    <input type="checkbox" id="theme-chk" hidden>
+    <span class="pill"><span class="dot"></span></span>
+  </label>
+</header>
+
+<main>
+  <div class="gauges">
+    <div class="gauge-wrap">    <canvas id="g-dl"></canvas>     </div>
+    <div class="gauge-wrap">    <canvas id="g-ul"></canvas>     </div>
+    <div class="gauge-wrap sm"> <canvas id="g-ping"></canvas>   </div>
+    <div class="gauge-wrap sm"> <canvas id="g-jitter"></canvas> </div>
+  </div>
+
+  <div class="controls">
+    <p id="ip-info"></p>
+    <button id="btn-start" disabled>Loading…</button>
+    <button id="btn-share" style="display:none">Share Results</button>
+  </div>
+
+  <div id="chart-section">
+    <canvas id="speed-chart"></canvas>
+  </div>
+
+  <div id="results">
+    <div class="r-card" data-m="dl">
+      <div class="r-val" id="r-dl">—</div>
+      <div class="r-label">Download</div>
+      <div class="r-unit">Mbps</div>
+    </div>
+    <div class="r-card" data-m="ul">
+      <div class="r-val" id="r-ul">—</div>
+      <div class="r-label">Upload</div>
+      <div class="r-unit">Mbps</div>
+    </div>
+    <div class="r-card" data-m="ping">
+      <div class="r-val" id="r-ping">—</div>
+      <div class="r-label">Ping</div>
+      <div class="r-unit">ms</div>
+    </div>
+    <div class="r-card" data-m="jitter">
+      <div class="r-val" id="r-jitter">—</div>
+      <div class="r-label">Jitter</div>
+      <div class="r-unit">ms</div>
+    </div>
+    <div class="r-card" data-m="loss">
+      <div class="r-val" id="r-loss">—</div>
+      <div class="r-label">Packet Loss</div>
+      <div class="r-unit">%</div>
+    </div>
+  </div>
+
+  <div id="bloat-section">
+    <div class="bloat-card">
+      <div class="bloat-grade-wrap">
+        <span id="b-grade">–</span>
+        <span id="b-grade-desc">Buffer Bloat</span>
+      </div>
+      <div class="bloat-div"></div>
+      <div class="bloat-metrics">
+        <div class="bloat-hdr">Latency under load</div>
+        <div class="bm-row">
+          <span class="bm-key">Baseline ping</span>
+          <span class="bm-val" id="b-base">–</span>
+          <span class="bm-ms">ms</span>
+          <span class="bm-delta"></span>
+        </div>
+        <div class="bm-row">
+          <span class="bm-key">Under download</span>
+          <span class="bm-val" id="b-dl-ping">–</span>
+          <span class="bm-ms">ms</span>
+          <span class="bm-delta" id="b-dl-delta"></span>
+        </div>
+        <div class="bm-row">
+          <span class="bm-key">Under upload</span>
+          <span class="bm-val" id="b-ul-ping">–</span>
+          <span class="bm-ms">ms</span>
+          <span class="bm-delta" id="b-ul-delta"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="history-section">
+    <div class="history-hdr">
+      <span class="history-hdr-title">Test History</span>
+      <button id="btn-clear-history">Clear</button>
+    </div>
+    <div class="history-wrap">
+      <table class="history-table">
+        <thead>
+          <tr>
+            <th>Time</th>
+            <th>Download</th>
+            <th>Upload</th>
+            <th>Ping</th>
+            <th>Jitter</th>
+            <th>Loss</th>
+            <th>Bloat</th>
+            <th>Share</th>
+          </tr>
+        </thead>
+        <tbody id="history-list"></tbody>
+      </table>
+    </div>
+  </div>
+</main>
+
+<dialog id="share-dialog">
+  <button id="btn-close-share" class="close-x" title="Close">&#x2715;</button>
+  <h2>Share your results</h2>
+  <img id="share-img" src="" alt="Speed test results" />
+  <div class="share-row">
+    <input id="share-link" type="text" readonly />
+    <button id="btn-copy">Copy link</button>
+  </div>
+</dialog>
+
+<script>
+// ── Gauge geometry (240° arc, open at bottom) ─────────────────────────────
+// Clockwise from lower-left (150°) to lower-right (30°), passing over the top
+const G_START = (5 * Math.PI) / 6;
+const G_SWEEP = (4 * Math.PI) / 3;
+
+const GAUGES = {
+  dl:     { el: null, color: '#22d3ee', cssVar: '--dl', label: 'DOWNLOAD', unit: 'Mbps', isLog: true,  max: 10000 },
+  ul:     { el: null, color: '#a78bfa', cssVar: '--ul', label: 'UPLOAD',   unit: 'Mbps', isLog: true,  max: 10000 },
+  ping:   { el: null, color: '#34d399', cssVar: '--ping', label: 'PING',   unit: 'ms',   isLog: false, max: 500   },
+  jitter: { el: null, color: '#fbbf24', cssVar: '--jitter', label: 'JITTER', unit: 'ms', isLog: false, max: 150   },
+};
+
+// Tick definitions — log scale 1–10000 Mbps
+// Each decade (1-10, 10-100, 100-1G, 1G-10G) spans ~60° on the arc.
+// Labels at key reference points including 2.5G and 5G for multi-gig connections.
+function logTicks() {
+  const major = [
+    { v: 1,     label: '1'    },
+    { v: 5,     label: '5'    },
+    { v: 10,    label: '10'   },
+    { v: 50,    label: '50'   },
+    { v: 100,   label: '100'  },
+    { v: 500,   label: '500'  },
+    { v: 1000,  label: '1G'   },
+    { v: 2500,  label: '2.5G' },
+    { v: 5000,  label: '5G'   },
+    { v: 10000, label: '10G'  },
+  ];
+  const minor = [
+    2,3,4, 6,7,8,9,
+    20,30,40, 60,70,80,90,
+    200,300,400, 600,700,800,900,
+    1500,2000,3000,4000,6000,7000,7500,8000,9000,
+  ];
+  return [
+    ...major.map(m => ({ ...m, major: true  })),
+    ...minor.map(v => ({ v,    major: false })),
+  ];
+}
+function linTicks(vals, majors) {
+  return vals.map(v => ({ v, major: majors.includes(v), label: majors.includes(v) ? ''+v : '' }));
+}
+GAUGES.dl.ticks     = logTicks();
+GAUGES.ul.ticks     = logTicks();
+GAUGES.ping.ticks   = linTicks([0,50,100,150,200,250,300,400,500], [0,100,200,300,500]);
+GAUGES.jitter.ticks = linTicks([0,25,50,75,100,125,150],           [0,50,100,150]);
+
+function valToAngle(v, max, isLog) {
+  let r = isLog
+    ? Math.log10(Math.max(0.001, v) + 1) / Math.log10(max + 1)
+    : v / max;
+  return G_START + Math.max(0, Math.min(1, r)) * G_SWEEP;
+}
+
+function fmt(v) {
+  v = Number(v);
+  if (!v || isNaN(v)) return '–';
+  if (v < 10)  return v.toFixed(2);
+  if (v < 100) return v.toFixed(1);
+  return v.toFixed(0);
+}
+
+// Like fmt but treats 0 as a real value (e.g. jitter=0 on LAN is valid, not missing)
+function fmtResult(v) {
+  v = Number(v);
+  if (isNaN(v)) return '–';
+  if (v < 10)  return v.toFixed(2);
+  if (v < 100) return v.toFixed(1);
+  return v.toFixed(0);
+}
+
+function draw(g, value, progress, active, dimmed) {
+  const canvas = g.el;
+  const ctx = canvas.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  const W = canvas.clientWidth * dpr;
+  const H = canvas.clientHeight * dpr;
+  if (!W || !H) return;
+  if (canvas.width !== W || canvas.height !== H) { canvas.width = W; canvas.height = H; }
+  ctx.clearRect(0, 0, W, H);
+
+  // read accent color from CSS vars (changes between themes)
+  // neutral canvas colors use isLight directly — CSS-var reading is unreliable on canvas
+  const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+  const gColor  = getComputedStyle(document.documentElement).getPropertyValue(g.cssVar).trim() || g.color;
+  const cTrack  = isLight ? 'rgba(0,0,0,0.08)'       : 'rgba(255,255,255,0.07)';
+  const cTkMaj  = isLight ? 'rgba(0,0,0,0.35)'       : 'rgba(255,255,255,0.32)';
+  const cTkMin  = isLight ? 'rgba(0,0,0,0.12)'       : 'rgba(255,255,255,0.10)';
+  const cTkLbl  = isLight ? 'rgba(0,0,0,0.45)'       : 'rgba(255,255,255,0.38)';
+  const cNum    = isLight ? '#0f172a'  : '#ffffff';
+  const cNum0   = isLight ? '#0f172a'  : '#ffffff'; // solid; globalAlpha handles the fade
+
+  const cx = W / 2;
+  const R  = Math.min(W * 0.36, H * 0.55);
+  const cy = R + H * 0.08;
+  const tw = R * 0.09;
+  const a  = dimmed ? 0.3 : 1;
+
+  // background track
+  ctx.save();
+  ctx.globalAlpha = a;
+  ctx.beginPath();
+  ctx.arc(cx, cy, R, G_START, G_START + G_SWEEP, false);
+  ctx.strokeStyle = cTrack;
+  ctx.lineWidth = tw;
+  ctx.lineCap = 'round';
+  ctx.stroke();
+
+  // ticks
+  g.ticks.forEach(({ v, label, major }) => {
+    const ang = valToAngle(v, g.max, g.isLog);
+    const cos = Math.cos(ang), sin = Math.sin(ang);
+    ctx.beginPath();
+    ctx.moveTo(cx + (R + tw*0.15)*cos, cy + (R + tw*0.15)*sin);
+    ctx.lineTo(cx + (major ? R-tw*0.9 : R-tw*0.45)*cos, cy + (major ? R-tw*0.9 : R-tw*0.45)*sin);
+    ctx.strokeStyle = major ? cTkMaj : cTkMin;
+    ctx.lineWidth = major ? 1.5*dpr : 0.8*dpr;
+    ctx.lineCap = 'butt';
+    ctx.stroke();
+    if (label && major) {
+      const lr = R - tw*1.75;
+      ctx.font = `${Math.round(9.5*dpr)}px Inter,sans-serif`;
+      ctx.fillStyle = cTkLbl;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(label, cx + lr*cos, cy + lr*sin);
+    }
+  });
+  ctx.restore();
+
+  // value arc + glow
+  if (value > 0) {
+    const va = valToAngle(value, g.max, g.isLog);
+
+    if (active && !isLight) {
+      ctx.save();
+      ctx.globalAlpha = 0.4;
+      ctx.beginPath();
+      ctx.arc(cx, cy, R, G_START, va, false);
+      ctx.strokeStyle = gColor;
+      ctx.lineWidth = tw * 2.8;
+      ctx.lineCap = 'round';
+      ctx.filter = `blur(${Math.round(tw*0.7)}px)`;
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    ctx.save();
+    ctx.globalAlpha = a;
+    ctx.beginPath();
+    ctx.arc(cx, cy, R, G_START, va, false);
+    ctx.strokeStyle = gColor;
+    ctx.lineWidth = tw;
+    ctx.lineCap = 'round';
+    if (active && !isLight) { ctx.shadowColor = gColor; ctx.shadowBlur = 10*dpr; }
+    ctx.stroke();
+    ctx.restore();
+
+    // tip dot
+    ctx.save();
+    ctx.globalAlpha = a;
+    ctx.beginPath();
+    ctx.arc(cx + R*Math.cos(va), cy + R*Math.sin(va), tw*0.62, 0, 2*Math.PI);
+    ctx.fillStyle = cNum;
+    if (!isLight) { ctx.shadowColor = gColor; ctx.shadowBlur = active ? 14*dpr : 6*dpr; }
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // progress ring — stays visible while active even after progress hits 1.0,
+  // because the test worker can report 100% a few seconds before testState changes
+  if (active && progress > 0) {
+    const ringEnd = G_START + Math.min(progress, 1) * G_SWEEP;
+    ctx.save();
+    ctx.globalAlpha = 0.45;
+    ctx.beginPath();
+    ctx.arc(cx, cy, R + tw*1.05, G_START, ringEnd, false);
+    ctx.strokeStyle = gColor;
+    ctx.lineWidth = 2*dpr;
+    ctx.lineCap = 'round';
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // text
+  const numY  = cy + R * 0.28;
+  const numSz = Math.round(R * 0.38);
+  const uSz   = Math.round(R * 0.13);
+  const lSz   = Math.round(R * 0.105);
+
+  ctx.save();
+  ctx.globalAlpha = dimmed ? 0.2 : (value > 0 ? 1 : (isLight ? 0.38 : 0.18));
+  ctx.font = `200 ${numSz}px Inter,sans-serif`;
+  ctx.fillStyle = value > 0 ? cNum : cNum0;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'alphabetic';
+  ctx.fillText(value > 0 ? fmt(value) : '–', cx, numY);
+  ctx.restore();
+
+  ctx.save();
+  ctx.globalAlpha = dimmed ? 0.18 : (isLight ? 0.9 : 0.72);
+  ctx.font = `500 ${uSz}px Inter,sans-serif`;
+  ctx.fillStyle = gColor;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  ctx.fillText(g.unit, cx, numY + uSz*0.3);
+  ctx.restore();
+
+  ctx.save();
+  ctx.globalAlpha = dimmed ? 0.18 : (isLight ? 0.65 : 0.42);
+  ctx.font = `700 ${lSz}px Inter,sans-serif`;
+  ctx.fillStyle = cNum;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  ctx.fillText(g.label, cx, numY + uSz*0.3 + uSz*1.5);
+  ctx.restore();
+}
+
+// ── Chart state ───────────────────────────────────────────────────────────────
+const dlPoints = [];   // { t: seconds, v: Mbps }
+const ulPoints = [];
+let chartT0      = null;  // Date.now() when test started (chart visibility trigger)
+let dlT0         = null;  // Date.now() when DL phase first produced a sample
+let ulT0         = null;  // Date.now() when UL phase first produced a sample
+let chartLastMs  = 0;
+const CHART_MS   = 350;   // sample every ~350ms
+
+function niceMax(v) {
+  const steps = [1,2,5,10,20,50,100,200,500,1000,2000,5000,10000];
+  const target = v * 1.25;
+  return steps.find(s => s >= target) || 10000;
+}
+function niceTime(t) {
+  const steps = [5,10,15,20,25,30,40,50,60,90,120];
+  for (const s of steps) if (s >= t + 2) return s;
+  return Math.ceil((t + 5) / 10) * 10;
+}
+function fmtMbps(v) {
+  if (v >= 1000) return (v / 1000).toFixed(v % 1000 === 0 ? 0 : 1) + 'G';
+  return v >= 10 ? v.toFixed(0) : v.toFixed(1);
+}
+
+function drawChart() {
+  const canvas = document.getElementById('speed-chart');
+  if (!canvas) return;
+  const dpr = window.devicePixelRatio || 1;
+  const W = canvas.clientWidth  * dpr;
+  const H = canvas.clientHeight * dpr;
+  if (!W || !H) return;
+  if (canvas.width !== W || canvas.height !== H) { canvas.width = W; canvas.height = H; }
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, W, H);
+
+  const allPts = [...dlPoints, ...ulPoints];
+  if (allPts.length === 0) return;
+
+  const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+  const cs      = getComputedStyle(document.documentElement);
+  const dlColor = cs.getPropertyValue('--dl').trim();
+  const ulColor = cs.getPropertyValue('--ul').trim();
+
+  // layout
+  const padL = Math.round(W * 0.085);
+  const padR = Math.round(W * 0.030);
+  const padT = Math.round(H * 0.20);
+  const padB = Math.round(H * 0.22);
+  const cW = W - padL - padR;
+  const cH = H - padT - padB;
+
+  // scales
+  const rawMax = Math.max(...allPts.map(p => p.v));
+  const yMax   = niceMax(rawMax);
+  const tMax   = Math.max(...allPts.map(p => p.t));
+  const xMax   = niceTime(tMax);
+  const xOf    = t => padL + (t / xMax) * cW;
+  const yOf    = v => padT + cH - Math.min(v / yMax, 1.05) * cH;
+
+  const neutral = isLight ? '#0f172a' : '#ffffff';
+
+  // horizontal grid + Y labels
+  const gridN = 4;
+  for (let i = 0; i <= gridN; i++) {
+    const y = padT + cH - (i / gridN) * cH;
+    const v = (i / gridN) * yMax;
+    ctx.save();
+    ctx.globalAlpha = 0.08;
+    ctx.strokeStyle = neutral;
+    ctx.lineWidth   = dpr;
+    ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(padL + cW, y); ctx.stroke();
+    ctx.globalAlpha = isLight ? 0.45 : 0.35;
+    ctx.fillStyle   = neutral;
+    ctx.font        = `${Math.round(9 * dpr)}px Inter,sans-serif`;
+    ctx.textAlign   = 'right';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(fmtMbps(v), padL - 5 * dpr, y);
+    ctx.restore();
+  }
+
+  // "Mbps" unit tag above Y axis
+  ctx.save();
+  ctx.globalAlpha  = isLight ? 0.35 : 0.28;
+  ctx.fillStyle    = neutral;
+  ctx.font         = `600 ${Math.round(8 * dpr)}px Inter,sans-serif`;
+  ctx.textAlign    = 'right';
+  ctx.textBaseline = 'bottom';
+  ctx.fillText('Mbps', padL - 5 * dpr, padT - 3 * dpr);
+  ctx.restore();
+
+  // X axis time ticks
+  const xStep = xMax <= 10 ? 2 : xMax <= 20 ? 5 : xMax <= 40 ? 10 : 15;
+  for (let t = 0; t <= xMax; t += xStep) {
+    ctx.save();
+    ctx.globalAlpha  = isLight ? 0.38 : 0.28;
+    ctx.fillStyle    = neutral;
+    ctx.font         = `${Math.round(8.5 * dpr)}px Inter,sans-serif`;
+    ctx.textAlign    = 'center';
+    ctx.textBaseline = 'top';
+    ctx.fillText(t + 's', xOf(t), padT + cH + 5 * dpr);
+    ctx.restore();
+  }
+
+  // legend: DL on left quarter, UL on right quarter — both start at t=0
+  function phaseLabel(pts, label, color, xCenter) {
+    if (pts.length === 0) return;
+    const peak = Math.max(...pts.map(p => p.v));
+    ctx.save();
+    ctx.globalAlpha  = isLight ? 0.60 : 0.55;
+    ctx.fillStyle    = color;
+    ctx.font         = `700 ${Math.round(8.5 * dpr)}px Inter,sans-serif`;
+    ctx.textAlign    = 'center';
+    ctx.textBaseline = 'bottom';
+    ctx.fillText(`${label}  ${fmtMbps(peak)} Mbps`, xCenter, padT - 5 * dpr);
+    ctx.restore();
+  }
+  phaseLabel(dlPoints, 'DOWNLOAD', dlColor, padL + cW * 0.25);
+  phaseLabel(ulPoints, 'UPLOAD',   ulColor, padL + cW * 0.75);
+
+  // draw one phase line + area fill
+  function drawLine(pts, color) {
+    if (pts.length === 0) return;
+    if (pts.length === 1) {
+      ctx.save();
+      ctx.fillStyle = color; ctx.globalAlpha = 0.9;
+      ctx.beginPath(); ctx.arc(xOf(pts[0].t), yOf(pts[0].v), 4 * dpr, 0, 2 * Math.PI); ctx.fill();
+      ctx.restore(); return;
+    }
+
+    // area fill
+    ctx.save();
+    ctx.globalAlpha = isLight ? 0.07 : 0.11;
+    ctx.fillStyle   = color;
+    ctx.beginPath();
+    ctx.moveTo(xOf(pts[0].t), padT + cH);
+    pts.forEach(p => ctx.lineTo(xOf(p.t), yOf(p.v)));
+    ctx.lineTo(xOf(pts[pts.length - 1].t), padT + cH);
+    ctx.closePath(); ctx.fill();
+    ctx.restore();
+
+    // smooth line via midpoint quadratic bezier
+    ctx.save();
+    ctx.strokeStyle = color;
+    ctx.lineWidth   = 2.5 * dpr;
+    ctx.lineJoin    = 'round';
+    ctx.lineCap     = 'round';
+    if (!isLight) { ctx.shadowColor = color; ctx.shadowBlur = 8 * dpr; }
+    ctx.beginPath();
+    ctx.moveTo(xOf(pts[0].t), yOf(pts[0].v));
+    for (let i = 1; i < pts.length; i++) {
+      const cur = pts[i];
+      if (i < pts.length - 1) {
+        const next = pts[i + 1];
+        const mx = (xOf(cur.t) + xOf(next.t)) / 2;
+        const my = (yOf(cur.v) + yOf(next.v)) / 2;
+        ctx.quadraticCurveTo(xOf(cur.t), yOf(cur.v), mx, my);
+      } else {
+        ctx.lineTo(xOf(cur.t), yOf(cur.v));
+      }
+    }
+    ctx.stroke();
+
+    // end dot
+    const last = pts[pts.length - 1];
+    ctx.shadowBlur  = 0;
+    ctx.globalAlpha = 1;
+    ctx.fillStyle   = color;
+    ctx.beginPath(); ctx.arc(xOf(last.t), yOf(last.v), 4 * dpr, 0, 2 * Math.PI); ctx.fill();
+    ctx.restore();
+  }
+
+  drawLine(dlPoints, dlColor);
+  drawLine(ulPoints, ulColor);
+}
+
+// ── Buffer bloat ─────────────────────────────────────────────────────────────
+// The LibreSpeed worker only measures ping during the dedicated ts=2 phase.
+// We fire parallel fetch pings to /backend/empty during DL and UL to measure
+// loaded latency independently, which is the true buffer bloat signal.
+const bloatDlSamples = [];  // RTT samples (ms) while download is saturating link
+const bloatUlSamples = [];  // RTT samples (ms) while upload is saturating link
+let bloatTimer  = null;
+let bloatActive = false;
+let bloatShown  = false;
+let prevTs      = -1;
+
+function startBloatPing(arr) {
+  stopBloatPing();
+  bloatActive = false;
+  bloatTimer = setInterval(async () => {
+    if (bloatActive) return;
+    bloatActive = true;
+    try {
+      const t0 = performance.now();
+      await fetch('backend/empty?' + (t0 | 0), { cache: 'no-store' });
+      arr.push(performance.now() - t0);
+    } catch(_) {}
+    bloatActive = false;
+  }, 400);
+}
+function stopBloatPing() {
+  if (bloatTimer) { clearInterval(bloatTimer); bloatTimer = null; }
+  bloatActive = false;
+}
+
+function bloatGrade(ms) {
+  if (ms <   5) return { g: 'A+', color: 'var(--ping)',    desc: 'Excellent' };
+  if (ms <  30) return { g: 'A',  color: 'var(--ping)',    desc: 'Good'      };
+  if (ms <  60) return { g: 'B',  color: 'var(--jitter)',  desc: 'Acceptable'};
+  if (ms < 100) return { g: 'C',  color: '#f97316',        desc: 'Poor'      };
+  if (ms < 200) return { g: 'D',  color: '#f87171',        desc: 'Bad'       };
+  return         { g: 'F',  color: '#f87171',        desc: 'Critical'  };
+}
+
+function showBloat(basePing) {
+  if (!basePing || basePing <= 0) return;
+  if (bloatDlSamples.length === 0 && bloatUlSamples.length === 0) return;
+
+  const median = arr => {
+    if (!arr.length) return null;
+    const s = [...arr].sort((a, b) => a - b);
+    const m = Math.floor(s.length / 2);
+    return s.length % 2 === 0 ? (s[m - 1] + s[m]) / 2 : s[m];
+  };
+
+  const dlPing = median(bloatDlSamples);
+  const ulPing = median(bloatUlSamples);
+  const dlInc  = dlPing !== null ? dlPing - basePing : null;
+  const ulInc  = ulPing !== null ? ulPing - basePing : null;
+  const worst  = Math.max(dlInc ?? -Infinity, ulInc ?? -Infinity);
+  if (worst < 0) return; // measurement noise, skip
+
+  const { g, color, desc } = bloatGrade(worst);
+  lastBloatGrade = g;
+  document.getElementById('b-grade').textContent      = g;
+  document.getElementById('b-grade').style.color      = color;
+  document.getElementById('b-grade-desc').textContent = desc;
+  document.getElementById('b-base').textContent       = basePing.toFixed(0);
+
+  function fillRow(valId, deltaId, ping, inc) {
+    if (ping === null) { document.getElementById(valId).textContent = '–'; return; }
+    document.getElementById(valId).textContent = ping.toFixed(0);
+    const el  = document.getElementById(deltaId);
+    const pos = inc > 5;
+    el.textContent = (inc >= 0 ? '+' : '') + inc.toFixed(0) + ' ms';
+    el.className   = 'bm-delta ' + (pos ? 'pos' : 'zero');
+  }
+  fillRow('b-dl-ping', 'b-dl-delta', dlPing, dlInc);
+  fillRow('b-ul-ping', 'b-ul-delta', ulPing, ulInc);
+
+  document.getElementById('bloat-section').classList.add('visible');
+}
+
+// ── Packet loss ──────────────────────────────────────────────────────────────
+// Measured during the dedicated ping phase (ts=2) with parallel fetch probes.
+// Each probe has a 1500ms timeout; missed/timed-out = lost packet.
+let lossTotal    = 0;
+let lossReceived = 0;
+let lossTimer    = null;
+let lossValue    = null; // final percentage, set when done
+
+function startLossTest() {
+  stopLossTest();
+  lossTotal = 0; lossReceived = 0;
+  lossTimer = setInterval(async () => {
+    lossTotal++;
+    try {
+      await Promise.race([
+        fetch('backend/empty?' + lossTotal, { cache: 'no-store' }),
+        new Promise((_, rej) => setTimeout(() => rej(), 1500)),
+      ]);
+      lossReceived++;
+    } catch(_) {}
+  }, 200);
+}
+function stopLossTest() {
+  if (lossTimer) { clearInterval(lossTimer); lossTimer = null; }
+}
+function showLoss() {
+  if (lossTotal === 0) return;
+  const pct = ((lossTotal - lossReceived) / lossTotal) * 100;
+  lossValue = pct;
+  const el  = document.getElementById('r-loss');
+  el.textContent  = pct === 0 ? '0.0' : pct.toFixed(1);
+  el.style.color  = pct === 0       ? 'var(--ping)'
+                  : pct < 2         ? 'var(--jitter)'
+                  :                   '#f87171';
+}
+
+// ── Grade calculation ───────────────────────────────────────────────────────────
+function calculateGrade(dl, ul, ping, jitter, loss, latencyUnderload) {
+  // Grade calculation based on multiple criteria
+  // Returns object with {grade: "A", criteria: {...}}
+
+  const criteria = {
+    dl: dl >= 100 ? 'A' : dl >= 50 ? 'B' : dl >= 20 ? 'C' : dl >= 10 ? 'D' : dl >= 5 ? 'E' : 'F',
+    ul: ul >= 100 ? 'A' : ul >= 50 ? 'B' : ul >= 20 ? 'C' : ul >= 10 ? 'D' : ul >= 5 ? 'E' : 'F',
+    ping: ping <= 10 ? 'A' : ping <= 25 ? 'B' : ping <= 50 ? 'C' : ping <= 100 ? 'D' : ping <= 200 ? 'E' : 'F',
+    jitter: jitter <= 5 ? 'A' : jitter <= 10 ? 'B' : jitter <= 20 ? 'C' : jitter <= 40 ? 'D' : jitter <= 60 ? 'E' : 'F',
+    loss: loss === 0 ? 'A' : loss < 1 ? 'B' : loss < 2 ? 'C' : loss < 5 ? 'D' : loss < 10 ? 'E' : 'F'
+  };
+
+  // Calculate overall grade (worst of all criteria)
+  const grades = ['A', 'B', 'C', 'D', 'E', 'F'];
+  const gradeValues = { A: 6, B: 5, C: 4, D: 3, E: 2, F: 1 };
+
+  let worstGrade = 'A';
+  let worstValue = 6;
+
+  for (const key in criteria) {
+    const val = gradeValues[criteria[key]];
+    if (val < worstValue) {
+      worstValue = val;
+      worstGrade = criteria[key];
+    }
+  }
+
+  // If latency underload is significantly worse (>20ms worse than base ping), downgrade grade
+  if (latencyUnderload && parseFloat(latencyUnderload) > 20) {
+    const currentIndex = grades.indexOf(worstGrade);
+    if (currentIndex < grades.length - 1) {
+      worstGrade = grades[currentIndex + 1];
+    }
+  }
+
+  return {
+    grade: worstGrade,
+    criteria: criteria
+  };
+}
+
+// ── Test history ─────────────────────────────────────────────────────────────
+const HIST_KEY = 'ls-history';
+const HIST_MAX = 10;
+let lastBloatGrade = null; // grade letter set by showBloat, used when saving
+
+function getHistory() {
+  try { return JSON.parse(localStorage.getItem(HIST_KEY)) || []; } catch(_) { return []; }
+}
+
+function saveHistory(arr) {
+  localStorage.setItem(HIST_KEY, JSON.stringify(arr));
+}
+
+function fmtHistDate(ts) {
+  const d    = new Date(ts);
+  const now  = new Date();
+  const time = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  if (d.toDateString() === now.toDateString()) return time;
+  const yest = new Date(now); yest.setDate(now.getDate() - 1);
+  if (d.toDateString() === yest.toDateString()) return 'Yesterday ' + time;
+  if (now - d < 7 * 86400000) return d.toLocaleDateString([], { weekday: 'short' }) + ' ' + time;
+  return d.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' ' + time;
+}
+
+function renderHistory() {
+  const hist    = getHistory();
+  const section = document.getElementById('history-section');
+  const tbody   = document.getElementById('history-list');
+  if (!hist.length) { section.classList.remove('visible'); return; }
+  section.classList.add('visible');
+  tbody.innerHTML = hist.map((r, i) => {
+    const bc = r.bloat ? 'hr-bloat-' + r.bloat.replace('+', 'p') : '';
+    const lc = r.loss == null ? '' : r.loss === 0 ? 'hr-ping' : r.loss < 2 ? 'hr-jitter' : 'hr-loss-bad';
+    const lv = r.loss == null ? '–' : r.loss === 0 ? '0.0%' : r.loss.toFixed(1) + '%';
+    const shareBtn = r.testId ? `<button class="share-btn" data-test-id="${r.testId}" title="Share result">Share</button>` : '–';
+    return `<tr class="${i === 0 ? 'hr-new' : ''}">
+      <td class="hr-date">${fmtHistDate(r.ts)}</td>
+      <td class="hr-dl">${fmtResult(r.dl)}<em> Mbps</em></td>
+      <td class="hr-ul">${fmtResult(r.ul)}<em> Mbps</em></td>
+      <td class="hr-ping">${fmtResult(r.ping)}<em> ms</em></td>
+      <td class="hr-jitter">${fmtResult(r.jitter)}<em> ms</em></td>
+      <td class="${lc}">${lv}</td>
+      <td class="${bc}">${r.bloat || '–'}</td>
+      <td class="hr-share">${shareBtn}</td>
+    </tr>`;
+  }).join('');
+}
+
+function addHistoryEntry(dl, ul, ping, jitter, loss, bloat, testId) {
+  const hist = getHistory();
+  hist.unshift({ ts: Date.now(), dl, ul, ping, jitter, loss, bloat, testId });
+  if (hist.length > HIST_MAX) hist.length = HIST_MAX;
+  saveHistory(hist);
+  renderHistory();
+}
+
+// ── App ──────────────────────────────────────────────────────────────────────
+let state  = 'idle';
+let data   = null;
+let testId = null;
+let sp     = null;
+let chartData = { dl: [], ul: [] };  // Store chart data for final results
+let gradeData = null;  // Store grade calculation results
+
+// ── Device identity (survives IP change) ───────────────────────────────────────
+// clientId: random UUID stored in localStorage — stable per browser install
+// fingerprint: hash of stable browser attributes — survives cache clear
+function uuidv4() {
+  return ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c =>
+    (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c/4).toString(16)
+  );
+}
+async function sha256hex(str) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+  return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2,'0')).join('');
+}
+async function getClientIdentity() {
+  // 1. persistent clientId from localStorage (or generate on first visit)
+  const CID_KEY = 'ls-client-id';
+  let clientId = localStorage.getItem(CID_KEY);
+  if (!clientId) {
+    clientId = uuidv4();
+    localStorage.setItem(CID_KEY, clientId);
+  }
+  // 2. lightweight fingerprint from attributes the browser allows
+  const nav = navigator;
+  const parts = [
+    nav.userAgent || '',
+    nav.language || '',
+    (nav.languages || []).join(','),
+    String(nav.hardwareConcurrency || ''),
+    String(nav.deviceMemory || ''),
+    nav.platform || '',
+    screen.width + 'x' + screen.height,
+    screen.colorDepth + '',
+    Intl.DateTimeFormat().resolvedOptions().timeZone || '',
+    String(new Date().getTimezoneOffset()),
+  ].join('|');
+  const fingerprint = await sha256hex(parts);
+  // combined id = clientId anchored by fingerprint (so cache-clear still links)
+  return clientId + ':' + fingerprint.slice(0, 16);
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+  GAUGES.dl.el     = document.getElementById('g-dl');
+  GAUGES.ul.el     = document.getElementById('g-ul');
+  GAUGES.ping.el   = document.getElementById('g-ping');
+  GAUGES.jitter.el = document.getElementById('g-jitter');
+
+  // ── theme toggle ────────────────────────────────────────────────────────────
+  const themeChk = document.getElementById('theme-chk');
+  themeChk.checked = document.documentElement.getAttribute('data-theme') === 'light';
+  themeChk.addEventListener('change', () => {
+    const next = themeChk.checked ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', next);
+    localStorage.setItem('ls-theme', next);
+    // redraw gauges + chart immediately so canvas doesn't keep stale dark-mode colors
+    if (state !== 'running') {
+      Object.values(GAUGES).forEach(g => draw(g, 0, 0, false, false));
+      drawChart();
+    }
+  });
+
+  Object.values(GAUGES).forEach(g => draw(g, 0, 0, false, false));
+  renderHistory(); // show existing history on page load
+
+  sp = new Speedtest();
+  sp.setParameter('telemetry_level', 'basic');
+  sp.setParameter('count_ping', '30'); // longer ping phase gives more loss samples
+  sp.onupdate = d => { data = d; };
+  sp.onend    = () => { state = 'done'; };
+
+  const btn     = document.getElementById('btn-start');
+  const btnShare = document.getElementById('btn-share');
+  btn.disabled  = false;
+  btn.textContent = 'Start Test';
+
+  btn.addEventListener('click', () => {
+    if (state === 'running') { sp.abort(); return; }
+    data   = null;
+    testId = null;
+    state  = 'running';
+    document.getElementById('results').classList.remove('visible');
+    document.getElementById('ip-info').innerHTML = '';
+    btnShare.style.display = 'none';
+    btn.textContent = 'Abort';
+    btn.classList.add('abort');
+    Object.values(GAUGES).forEach(g => draw(g, 0, 0, false, false));
+    // reset chart
+    dlPoints.length = 0; ulPoints.length = 0;
+    chartT0 = null; dlT0 = null; ulT0 = null; chartLastMs = 0;
+    document.getElementById('chart-section').classList.remove('visible');
+    // reset buffer bloat
+    bloatDlSamples.length = 0; bloatUlSamples.length = 0;
+    prevTs = -1; bloatShown = false; lastBloatGrade = null;
+    lossTotal = 0; lossReceived = 0; lossValue = null;
+    stopBloatPing(); stopLossTest();
+    document.getElementById('r-loss').textContent = '—';
+    document.getElementById('r-loss').style.color = '';
+    document.getElementById('bloat-section').classList.remove('visible');
+    // attach device identity so telemetry links repeated tests to this machine
+    getClientIdentity().then(id => {
+      sp.setParameter('client_id', id);
+      sp.start();
+    });
+  });
+
+  // share button → open dialog
+  btnShare.addEventListener('click', () => {
+    if (!testId) return;
+    let imgUrl = location.origin + location.pathname.replace(/[^/]*$/, '') + 'results/?id=' + testId;
+    let viewUrl = location.origin + location.pathname.replace(/[^/]*$/, '') + 'results/view?id=' + testId;
+    document.getElementById('share-img').src   = imgUrl;   // PNG image no modal
+    document.getElementById('share-link').value = viewUrl; // VIEW link para copiar
+    document.getElementById('share-dialog').showModal();
+  });
+
+  // Share buttons in history table (event delegation)
+  document.addEventListener('click', (e) => {
+    if (e.target.classList.contains('share-btn')) {
+      const testId = e.target.getAttribute('data-test-id');
+      if (testId) {
+        let imgUrl = location.origin + location.pathname.replace(/[^/]*$/, '') + 'results/?id=' + testId;
+        let viewUrl = location.origin + location.pathname.replace(/[^/]*$/, '') + 'results/view?id=' + testId;
+        document.getElementById('share-img').src   = imgUrl;   // PNG image no modal
+        document.getElementById('share-link').value = viewUrl; // VIEW link para copiar
+        document.getElementById('share-dialog').showModal();
+      }
+    }
+  });
+
+  // copy link
+  document.getElementById('btn-copy').addEventListener('click', async () => {
+    const link = document.getElementById('share-link').value;
+    try {
+      await navigator.clipboard.writeText(link);
+    } catch (_) {
+      document.getElementById('share-link').select();
+      document.execCommand('copy');
+    }
+    const btn = document.getElementById('btn-copy');
+    const orig = btn.textContent;
+    btn.textContent = 'Copied!';
+    setTimeout(() => btn.textContent = orig, 2500);
+  });
+
+  document.getElementById('btn-close-share').addEventListener('click', () =>
+    document.getElementById('share-dialog').close()
+  );
+
+  document.getElementById('btn-clear-history').addEventListener('click', () => {
+    localStorage.removeItem(HIST_KEY);
+    renderHistory();
+  });
+
+  // render loop
+  (function loop() {
+    requestAnimationFrame(loop);
+    if (!data) return;
+
+    const d       = data;
+    const ts      = d.testState;
+    const running = state === 'running';
+    const done    = state === 'done';
+
+    const oscDl = (running && ts === 1) ? 1 + 0.015 * Math.sin(Date.now() / 120) : 1;
+    const oscUl = (running && ts === 3) ? 1 + 0.015 * Math.sin(Date.now() / 120) : 1;
+
+    draw(GAUGES.dl,     (parseFloat(d.dlStatus)    ||0)*oscDl, parseFloat(d.dlProgress)  ||0, ts===1, running && ts!==1);
+    draw(GAUGES.ul,     (parseFloat(d.ulStatus)    ||0)*oscUl, parseFloat(d.ulProgress)  ||0, ts===3, running && ts!==3);
+    draw(GAUGES.ping,   (parseFloat(d.pingStatus)  ||0),       parseFloat(d.pingProgress)||0, ts===2, running && ts!==2);
+    draw(GAUGES.jitter, (parseFloat(d.jitterStatus)||0),       0,                             ts===2, running && ts!==2);
+
+    // chart sample collection + buffer bloat phase tracking
+    if (running) {
+      if (!chartT0) {
+        chartT0 = Date.now();
+        document.getElementById('chart-section').classList.add('visible');
+      }
+      const now = Date.now();
+      if (now - chartLastMs >= CHART_MS) {
+        chartLastMs = now;
+        if (ts === 1) {
+          const v = parseFloat(d.dlStatus) || 0;
+          if (v > 0) {
+            if (!dlT0) dlT0 = now;
+            dlPoints.push({ t: (now - dlT0) / 1000, v });
+          }
+        }
+        if (ts === 3) {
+          const v = parseFloat(d.ulStatus) || 0;
+          if (v > 0) {
+            if (!ulT0) ulT0 = now;
+            ulPoints.push({ t: (now - ulT0) / 1000, v });
+          }
+        }
+      }
+
+      // start/stop parallel ping on phase transitions
+      if (ts !== prevTs) {
+        if (ts === 1) startBloatPing(bloatDlSamples);
+        if (ts === 2) { stopBloatPing(); startLossTest(); }     // ping phase: measure loss
+        if (ts === 3) { stopLossTest(); startBloatPing(bloatUlSamples); }
+        prevTs = ts;
+      }
+    }
+    if (running || done) drawChart();
+
+    if (d.clientIp)
+      document.getElementById('ip-info').innerHTML = `Connected via <strong>${d.clientIp}</strong>`;
+
+    if (done) {
+      document.getElementById('r-dl').textContent     = fmtResult(d.dlStatus);
+      document.getElementById('r-ul').textContent     = fmtResult(d.ulStatus);
+      document.getElementById('r-ping').textContent   = fmtResult(d.pingStatus);
+      document.getElementById('r-jitter').textContent = fmtResult(d.jitterStatus);
+      document.getElementById('results').classList.add('visible');
+      btn.textContent = 'Test Again';
+      btn.classList.remove('abort');
+      if (d.testId) {
+        testId = d.testId;
+        // Capture chart data and grade
+        chartData = {
+          dl: d.dlChartData || [],
+          ul: d.ulChartData || []
+        };
+        // Calculate grade
+        const dl = parseFloat(d.dlStatus) || 0;
+        const ul = parseFloat(d.ulStatus) || 0;
+        const ping = parseFloat(d.pingStatus) || 0;
+        const jitter = parseFloat(d.jitterStatus) || 0;
+        const latencyUnderload = d.latencyUnderload ? parseFloat(d.latencyUnderload) : 0;
+        gradeData = calculateGrade(dl, ul, ping, jitter, lossValue || 0, latencyUnderload);
+        btnShare.style.display = '';
+      }
+      if (!bloatShown) {
+        stopBloatPing();
+        stopLossTest();
+        showLoss();
+        showBloat(parseFloat(d.pingStatus) || null);
+        bloatShown = true;
+        addHistoryEntry(
+          parseFloat(d.dlStatus)     || 0,
+          parseFloat(d.ulStatus)     || 0,
+          parseFloat(d.pingStatus)   || 0,
+          parseFloat(d.jitterStatus) || 0,
+          lossValue,
+          lastBloatGrade,
+          testId
+        );
+      }
+    }
+  })();
+});
+</script>
+</body>
 </html>

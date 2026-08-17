@@ -21,3 +21,11 @@ func (n *None) FetchByUUID(_ string) (*schema.TelemetryData, error) {
 func (n *None) FetchLast100() ([]schema.TelemetryData, error) {
 	return []schema.TelemetryData{}, nil
 }
+
+func (n *None) FetchAll(_, _ int) ([]schema.TelemetryData, error) {
+	return []schema.TelemetryData{}, nil
+}
+
+func (n *None) Count() (int, error) {
+	return 0, nil
+}

@@ -46,3 +46,9 @@ enable_http2=false
 # if you use HTTP/2 or TLS, you need to prepare certificates and private keys
 # tls_cert_file="cert.pem"
 # tls_key_file="privkey.pem"
+
+# redirect_from: if set, a plain-HTTP listener is started on this port and
+# redirects all requests to the main HTTPS listener (301).
+# Useful when running directly on port 443 without a reverse proxy.
+# Example: redirect_from="80"
+# redirect_from=""
