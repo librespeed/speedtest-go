@@ -375,5 +375,15 @@ Speedtest.prototype = {
   abort: function() {
     if (this._state < 3) throw "You cannot abort a test that's not started yet";
     if (this._state < 4) this.worker.postMessage("abort");
+  },
+  /**
+   * Reports a packet loss percentage measured by the caller (the worker has
+   * no way to measure this itself) so it can be folded into the stored
+   * grade. Safe to call at any point during or after the test.
+   */
+  reportLoss: function(percent) {
+    if (this.worker && this._state >= 3 && this._state < 4) {
+      this.worker.postMessage("loss " + percent);
+    }
   }
 };

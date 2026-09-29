@@ -51,8 +51,22 @@ CREATE TABLE speedtest_users (
     ping text,
     jitter text,
     log text,
-    uuid text
+    uuid text,
+    grade_data text,
+    chart_data text,
+    latency_underload text,
+    ping_during_test text,
+    client_id text
 );
+
+--
+-- Migration for existing installs: add the columns above if they are missing.
+--
+-- ALTER TABLE speedtest_users ADD COLUMN IF NOT EXISTS grade_data text;
+-- ALTER TABLE speedtest_users ADD COLUMN IF NOT EXISTS chart_data text;
+-- ALTER TABLE speedtest_users ADD COLUMN IF NOT EXISTS latency_underload text;
+-- ALTER TABLE speedtest_users ADD COLUMN IF NOT EXISTS ping_during_test text;
+-- ALTER TABLE speedtest_users ADD COLUMN IF NOT EXISTS client_id text;
 
 -- Commented out the following line because it assumes the user of the speedtest server, @bplower
 -- ALTER TABLE speedtest_users OWNER TO speedtest;

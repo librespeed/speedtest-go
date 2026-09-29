@@ -16,6 +16,11 @@ CREATE TABLE [dbo].[speedtest_users](
     [jitter]    [nvarchar](max) NULL,
     [log]       [nvarchar](max) NULL,
     [uuid]      [nvarchar](max) NULL,
+    [grade_data]         [nvarchar](max) NULL,
+    [chart_data]         [nvarchar](max) NULL,
+    [latency_underload]  [nvarchar](max) NULL,
+    [ping_during_test]   [nvarchar](max) NULL,
+    [client_id]          [nvarchar](max) NULL,
  CONSTRAINT [PK_speedtest_users] PRIMARY KEY CLUSTERED
 (
     [id] ASC
@@ -25,3 +30,21 @@ GO
 
 ALTER TABLE [dbo].[speedtest_users] ADD  CONSTRAINT [DF_speedtest_users_timestamp]  DEFAULT (getdate()) FOR [timestamp]
 GO
+
+-- Migration for existing installs: add the columns above if they are missing.
+--
+-- IF COL_LENGTH('dbo.speedtest_users', 'grade_data') IS NULL
+--     ALTER TABLE [dbo].[speedtest_users] ADD [grade_data] [nvarchar](max) NULL
+-- GO
+-- IF COL_LENGTH('dbo.speedtest_users', 'chart_data') IS NULL
+--     ALTER TABLE [dbo].[speedtest_users] ADD [chart_data] [nvarchar](max) NULL
+-- GO
+-- IF COL_LENGTH('dbo.speedtest_users', 'latency_underload') IS NULL
+--     ALTER TABLE [dbo].[speedtest_users] ADD [latency_underload] [nvarchar](max) NULL
+-- GO
+-- IF COL_LENGTH('dbo.speedtest_users', 'ping_during_test') IS NULL
+--     ALTER TABLE [dbo].[speedtest_users] ADD [ping_during_test] [nvarchar](max) NULL
+-- GO
+-- IF COL_LENGTH('dbo.speedtest_users', 'client_id') IS NULL
+--     ALTER TABLE [dbo].[speedtest_users] ADD [client_id] [nvarchar](max) NULL
+-- GO

@@ -35,6 +35,13 @@ type Config struct {
 	EnableTLS   bool   `mapstructure:"enable_tls"`
 	TLSCertFile string `mapstructure:"tls_cert_file"`
 	TLSKeyFile  string `mapstructure:"tls_key_file"`
+
+	RedirectPort string `mapstructure:"redirect_from"`
+	// RedirectHost is the canonical hostname used to build the Location for
+	// the HTTP→HTTPS redirect. When unset, the incoming Host header is used
+	// as a fallback (after strict validation) — set this in production so
+	// the redirect target never depends on client-supplied input.
+	RedirectHost string `mapstructure:"redirect_host"`
 }
 
 var (

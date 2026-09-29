@@ -12,9 +12,74 @@
     // Set this to a different URL to load the server list from another location.
     var SPEEDTEST_SERVERS = "server-list.json";
   </script>
+  <script type="text/javascript" src="javascript/gauges.js"></script>
   <script type="text/javascript" src="javascript/index.js"></script>
   <link rel="stylesheet" type="text/css" href="styling/index.css" />
   <title>LibreSpeed - Free and Open Source Speedtest</title>
+  <style>
+    /* Canvas gauges + results panel used by javascript/index.js */
+    .gauges {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem 3rem;
+      width: 100%;
+      max-width: 70rem;
+      margin: 5rem auto 0;
+    }
+    .gauge-wrap { display: flex; justify-content: center; }
+    .gauge-wrap canvas {
+      width: 100%;
+      max-width: 32rem;
+      aspect-ratio: 1.45 / 1;
+      display: block;
+      min-width: 0;
+    }
+    .gauge-wrap.sm canvas { max-width: 24rem; }
+
+    #ip-display {
+      margin-top: 2rem;
+      font-size: 1.4rem;
+      color: var(--secondary-text-color);
+      text-align: center;
+      min-height: 2rem;
+    }
+    #ip-display strong { color: var(--primary-text-color); }
+
+    #results-panel {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 1.2rem;
+      width: 100%;
+      max-width: 70rem;
+      margin: 2rem auto 0;
+    }
+    #results-panel.hidden { display: none; }
+    .result-card {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 1.4rem 1rem;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--server-selector-border-color);
+      border-radius: 1rem;
+    }
+    .result-value {
+      font-size: 2.4rem;
+      font-weight: 200;
+      color: var(--primary-text-color);
+    }
+    .result-label {
+      font-size: 0.9rem;
+      color: var(--secondary-text-color);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    @media screen and (max-width: 700px) {
+      .gauges, #results-panel { grid-template-columns: 1fr 1fr; }
+    }
+  </style>
 </head>
 
 <body>
@@ -43,29 +108,31 @@
     </p>
     <button class="disabled" id="start-button"></button>
 
-    <div class="gauge-layout">
-      <div class="ping hidden">
-        <span class="label">Ping</span>:&nbsp;
-        <span class="value" id="ping">00</span>ms
-      </div>
+    <div class="gauges">
+      <div class="gauge-wrap"><canvas id="dl-gauge"></canvas></div>
+      <div class="gauge-wrap"><canvas id="ul-gauge"></canvas></div>
+      <div class="gauge-wrap sm"><canvas id="ping-gauge"></canvas></div>
+      <div class="gauge-wrap sm"><canvas id="jitter-gauge"></canvas></div>
+    </div>
 
-      <div class="gauge download" id="download-gauge">
-        <div class="progress"></div>
-        <div class="speed"></div>
-        <h1><span id="download-speed">00</span> Mbps</h1>
-        <h2>Download</h2>
-      </div>
+    <p id="ip-display"></p>
 
-      <div class="gauge upload" id="upload-gauge">
-        <div class="progress"></div>
-        <div class="speed"></div>
-        <h1><span id="upload-speed">00</span> Mbps</h1>
-        <h2>Upload</h2>
+    <div id="results-panel" class="hidden">
+      <div class="result-card">
+        <span class="result-value" id="result-dl">–</span>
+        <span class="result-label">Download Mbps</span>
       </div>
-
-      <div class="jitter hidden">
-        <span class="label">Jitter</span>:&nbsp;
-        <span class="value" id="jitter">00</span>ms
+      <div class="result-card">
+        <span class="result-value" id="result-ul">–</span>
+        <span class="result-label">Upload Mbps</span>
+      </div>
+      <div class="result-card">
+        <span class="result-value" id="result-ping">–</span>
+        <span class="result-label">Ping ms</span>
+      </div>
+      <div class="result-card">
+        <span class="result-value" id="result-jitter">–</span>
+        <span class="result-label">Jitter ms</span>
       </div>
     </div>
 
