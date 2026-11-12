@@ -500,6 +500,7 @@ function ulTest(done) {
 					if (testState !== 3) return; // delayed stream ended up starting after the end of the upload test
 					tverb("ul test stream started " + i + " " + delay);
 					let prevLoaded = 0; // number of bytes transmitted last time onprogress was called
+					let streamLoaded = 0; // bytes counted for this stream, removed again if it fails
 					let x = new XMLHttpRequest();
 					xhr[i] = x;
 					let ie11workaround;
@@ -514,10 +515,19 @@ function ulTest(done) {
 					}
 					if (ie11workaround) {
 						// IE11 workaround: xhr.upload does not work properly, therefore we send a bunch of small 256k requests and use the onload event as progress. This is not precise, especially on fast connections
-						xhr[i].onload = xhr[i].onerror = function() {
+						xhr[i].onload = function() {
 							tverb("ul stream progress event (ie11wa)");
 							totLoaded += reqsmall.size;
 							testStream(i, 0);
+						};
+						xhr[i].onerror = function() {
+							tverb("ul stream failed (ie11wa) " + i);
+							if (settings.xhr_ignoreErrors === 0) failed = true; //abort
+							try {
+								xhr[i].abort();
+							} catch (e) {}
+							delete xhr[i];
+							if (settings.xhr_ignoreErrors === 1) testStream(i, 0); //restart stream
 						};
 						xhr[i].open("POST", settings.url_ul + url_sep(settings.url_ul) + (settings.mpot ? "cors=true&" : "") + "r=" + Math.random(), true); // random string to prevent caching
 						try {
@@ -538,6 +548,7 @@ function ulTest(done) {
 							const loadDiff = event.loaded <= 0 ? 0 : event.loaded - prevLoaded;
 							if (isNaN(loadDiff) || !isFinite(loadDiff) || loadDiff < 0) return; // just in case
 							totLoaded += loadDiff;
+							streamLoaded += loadDiff;
 							prevLoaded = event.loaded;
 						}.bind(this);
 						xhr[i].upload.onload = function() {
@@ -547,6 +558,15 @@ function ulTest(done) {
 						}.bind(this);
 						xhr[i].upload.onerror = function() {
 							tverb("ul stream failed " + i);
+							// Progress events count bytes as soon as they are handed to the
+							// network stack. If the request then fails (for example a reverse
+							// proxy rejects the body with 413), those bytes never completed a
+							// successful upload, so remove this stream's contribution before
+							// restarting it. Otherwise a retry loop inflates the result.
+							if (streamLoaded > 0) {
+								totLoaded = Math.max(0, totLoaded - streamLoaded);
+								streamLoaded = 0;
+							}
 							if (settings.xhr_ignoreErrors === 0) failed = true; //abort
 							try {
 								xhr[i].abort();
