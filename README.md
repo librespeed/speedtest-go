@@ -151,8 +151,8 @@ You need Go 1.21+ to compile the binary.
 
 - Test IDs are generated as ULID (Universally Unique Lexicographically Sortable Identifier), unlike the PHP version's auto-increment integer IDs
 - ID obfuscation is available as an optional feature — when enabled, ULIDs are obfuscated with a per-instance salt
-- The Go version ships with two built-in UI designs (classic gauges and modern CSS), switchable via `?design=new` URL parameter
-- The modern design (`index-modern.html`) supports multi-server configuration via `server-list.json` placed alongside the binary
+- The Go version ships with three front-end pages: `index.html` (the default, served at `/`), `index-classic.html`, and `index-modern.html` — pick one by requesting it directly (e.g. `/index-modern.html`); there is no `?design=` URL switch between them
+- `index.html` and `index-modern.html` render the same style of canvas gauges (sharing the drawing code in `javascript/gauges.js`), just with different page chrome — `index-modern.html` wears the fromScratch Studio stylesheet and additionally supports multi-server configuration via `server-list.json` placed alongside the binary
 - Server location can be defined in settings or auto-detected at startup
 - There might be a slight delay on program start if your Internet connection is slow. That's because the program will
 attempt to fetch your current network's ISP info for distance calculation between your network and the speed test client's.

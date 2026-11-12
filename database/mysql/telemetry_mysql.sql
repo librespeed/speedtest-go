@@ -32,8 +32,25 @@ CREATE TABLE `speedtest_users` (
   `ping` text,
   `jitter` text,
   `log` longtext,
-  `uuid` text
+  `uuid` text,
+  `grade_data` text,
+  `chart_data` longtext,
+  `latency_underload` text,
+  `ping_during_test` longtext,
+  `client_id` text
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+
+--
+-- Migration for existing installs: add the columns above if they are
+-- missing (MySQL 8.0.29+ / MariaDB 10.5.2+ support IF NOT EXISTS here;
+-- on older versions, drop the clause and ignore the "duplicate column"
+-- error if you re-run this).
+--
+-- ALTER TABLE `speedtest_users` ADD COLUMN IF NOT EXISTS `grade_data` text;
+-- ALTER TABLE `speedtest_users` ADD COLUMN IF NOT EXISTS `chart_data` longtext;
+-- ALTER TABLE `speedtest_users` ADD COLUMN IF NOT EXISTS `latency_underload` text;
+-- ALTER TABLE `speedtest_users` ADD COLUMN IF NOT EXISTS `ping_during_test` longtext;
+-- ALTER TABLE `speedtest_users` ADD COLUMN IF NOT EXISTS `client_id` text;
 
 --
 -- Indexes for dumped tables

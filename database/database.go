@@ -22,6 +22,13 @@ type DataAccess interface {
 	Insert(*schema.TelemetryData) error
 	FetchByUUID(string) (*schema.TelemetryData, error)
 	FetchLast100() ([]schema.TelemetryData, error)
+	FetchAll(offset, limit int) ([]schema.TelemetryData, error)
+	Count() (int, error)
+	// Search returns one page of records matching filters (ordered
+	// deterministically, newest first), plus the total number of matching
+	// records across all pages. Passing a zero-value SearchFilters matches
+	// everything, so this also replaces FetchAll+Count for the stats page.
+	Search(filters schema.SearchFilters, offset, limit int) ([]schema.TelemetryData, int, error)
 }
 
 func SetDBInfo(conf *config.Config) {
