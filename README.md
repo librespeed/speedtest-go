@@ -123,6 +123,8 @@ You need Go 1.21+ to compile the binary.
     # database type for statistics data, currently supports: none, memory, bolt, sqlite, mysql, postgresql, mssql
     # if none is specified, no telemetry/stats will be recorded, and no result PNG will be generated
     database_type="postgresql"
+    # For MySQL, include the driver network prefix and port in the hostname:
+    # database_hostname="tcp(127.0.0.1:3306)"
     database_hostname="localhost"
     database_name="speedtest"
     database_username="postgres"
