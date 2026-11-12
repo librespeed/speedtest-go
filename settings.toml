@@ -23,11 +23,13 @@ redact_ip_addresses=false
 # database type for statistics data, currently supports: none, memory, bolt, mysql, postgresql, sqlite, mssql
 # if none is specified, no telemetry/stats will be recorded, and no result PNG will be generated
 database_type="memory"
+# For MySQL, include the driver network prefix and port in the hostname:
+# database_hostname="tcp(127.0.0.1:3306)"
 database_hostname=""
 database_name=""
 database_username=""
 database_password=""
-# database port (optional, defaults to driver default)
+# database port (optional, defaults to driver default; only used by mssql)
 database_port=""
 
 # if you use `bolt` as database, set database_file to database file location
