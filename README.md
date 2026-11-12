@@ -24,7 +24,7 @@ Works with mobile versions too.
 * Multiple Points of Test (optional)
 * Compatible with PHP frontend predefined endpoints (with `.php` suffixes)
 * Supports [Proxy Protocol](https://www.haproxy.org/download/2.3/doc/proxy-protocol.txt)
-* Modern and classic UI designs with switchable interface
+* Modern and classic UI designs across three front-end pages
 * ID obfuscation for test result privacy (optional)
 
 ### IP Detection
@@ -93,7 +93,7 @@ You need Go 1.21+ to compile the binary.
 5. Put `assets` folder under the same directory as your compiled binary.
     - Make sure the font files and JavaScripts are in the `assets` directory
     - You can have multiple HTML pages under `assets` directory. They can be access directly under the server root
-    (e.g. `/example-singleServer-full.html`)
+    (e.g. `/example-singleServer-chart.html`)
     - It's possible to have a default page mapped to `/`, simply put a file named `index.html` under `assets`
 
 6. Change `settings.toml` according to your environment:
@@ -152,7 +152,7 @@ You need Go 1.21+ to compile the binary.
 - Test IDs are generated as ULID (Universally Unique Lexicographically Sortable Identifier), unlike the PHP version's auto-increment integer IDs
 - ID obfuscation is available as an optional feature — when enabled, ULIDs are obfuscated with a per-instance salt
 - The Go version ships with three front-end pages: `index.html` (the default, served at `/`), `index-classic.html`, and `index-modern.html` — pick one by requesting it directly (e.g. `/index-modern.html`); there is no `?design=` URL switch between them
-- `index.html` and `index-modern.html` render the same style of canvas gauges (sharing the drawing code in `javascript/gauges.js`), just with different page chrome — `index-modern.html` wears the fromScratch Studio stylesheet and additionally supports multi-server configuration via `server-list.json` placed alongside the binary
+- `index.html` and `index-modern.html` render the same style of canvas gauges (sharing the drawing code in `javascript/gauges.js`), just with different page chrome — `index-modern.html` wears the fromScratch Studio stylesheet and supports multi-server configuration via `server-list.json` placed alongside the binary. If that file is absent, it tests against the backend that served the page. Set `telemetry_level` in an optional `settings.json` to override the default telemetry setting.
 - Server location can be defined in settings or auto-detected at startup
 - There might be a slight delay on program start if your Internet connection is slow. That's because the program will
 attempt to fetch your current network's ISP info for distance calculation between your network and the speed test client's.

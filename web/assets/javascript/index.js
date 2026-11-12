@@ -131,36 +131,70 @@ function hookUpButtons() {
 }
 
 async function applySettingsJSON() {
+  let telemetryConfigured = false;
   try {
     const res  = await fetch('settings.json');
     const cfg  = await res.json();
     for (const k in cfg) {
       appState.speedtest.setParameter(k, cfg[k]);
-      if (k === 'telemetry_level' && cfg[k] && !['off','disabled','false'].includes(String(cfg[k]))) {
-        appState.telemetryEnabled = true;
-        document.getElementById('privacy-warning')?.classList.remove('hidden');
+      if (k === 'telemetry_level') {
+        telemetryConfigured = true;
+        if (cfg[k] && !['off','disabled','false'].includes(String(cfg[k]))) {
+          appState.telemetryEnabled = true;
+          document.getElementById('privacy-warning')?.classList.remove('hidden');
+        }
       }
     }
   } catch (_) {}
+
+  // Match index.html: telemetry is enabled by default unless settings.json
+  // explicitly disables it, so a finished test can show its shareable ID.
+  if (!telemetryConfigured) {
+    appState.speedtest.setParameter('telemetry_level', 'basic');
+    appState.telemetryEnabled = true;
+    document.getElementById('privacy-warning')?.classList.remove('hidden');
+  }
+}
+
+function localServer() {
+  return {
+    name: 'Local',
+    server: window.location.origin + window.location.pathname.replace(/[^/]*$/, ''),
+    dlURL: 'garbage.php',
+    ulURL: 'empty.php',
+    pingURL: 'empty.php',
+    getIpURL: 'getIP.php',
+  };
 }
 
 async function applyServerListJSON() {
+  let servers = [];
   try {
     const src = typeof globalThis.SPEEDTEST_SERVERS !== 'undefined'
       ? globalThis.SPEEDTEST_SERVERS
       : 'server-list.json';
-    const servers = Array.isArray(src)
+    servers = Array.isArray(src)
       ? src
       : await fetch(src).then(r => r.json());
-
-    if (!servers?.length) return console.error('Server list empty');
-    const server = servers[0];
-    appState.speedtest.setSelectedServer(server);
-    appState.selectedServerDirty = true;
-    appState.ui = READY;
   } catch (e) {
-    console.error('Failed to load server list', e);
+    // server-list.json is optional: fall back to the backend serving this page.
+    console.info('No server list, using local backend', e);
   }
+
+  try {
+    const server = Array.isArray(servers) && servers.length ? servers[0] : localServer();
+    appState.speedtest.setSelectedServer(server);
+  } catch (e) {
+    console.error('Failed to select a listed server, using local backend', e);
+    try {
+      appState.speedtest.setSelectedServer(localServer());
+    } catch (fallbackError) {
+      console.error('Failed to select the local backend', fallbackError);
+      return;
+    }
+  }
+  appState.selectedServerDirty = true;
+  appState.ui = READY;
 }
 
 // ── Render loop ─────────────────────────────────────────────────────────────
