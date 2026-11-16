@@ -60,6 +60,29 @@ Works with mobile versions too.
 
 You can use an Ansible role for installing speedtest-go easily. You can find the role on the [Ansible galaxy](https://galaxy.ansible.com/flymia/ansible_speedtest_go). There is a [separate repository](https://github.com/flymia/ansible-speedtest_go) for documentation about the Ansible role.
 
+### Docker/Docker Compose
+
+A `ghcr.io/speedtest/speedtest-go` image may be used to run speedtest-go in container. 
+(!) TODO: fix public visibility of `ghcr.io/speedtest/speedtest-go` packages.
+Container exposes `8989` TCP port. Container may be run from non root user (see `--user=<user_id>:<group_id>` docker arg or `user: "<user_id>:<group_id>` Docker Compose settings).
+Finally mount volume should be used to adjust custom settings (`/opt/settings.toml` container path) or server list (`/opt/assets/server-list.json` container path).
+
+An example of docker compose descriptor:
+
+```
+services:
+  speedtest:
+    image: ghcr.io/speedtest/speedtest-go:latest
+    restart: unless-stopped
+    volumes:
+      - ./settings.toml:/opt/settings.toml
+      - ./server-list.json:/opt/assets/server-list.json # ensure assets_path="assets" was set 
+    ports:
+      - "8989:8989"
+    #user: "1000:1000" # set tour non root user and group to run container
+```
+
+
 ### Compile from source
 
 You need Go 1.21+ to compile the binary.
