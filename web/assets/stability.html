@@ -1,37 +1,93 @@
-<!doctype html>
-<html>
+<!DOCTYPE html>
+<html lang="en">
   <head>
-    <link rel="shortcut icon" href="favicon.ico" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no, user-scalable=no" />
     <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no, user-scalable=no" />
+    <link rel="shortcut icon" href="images/favicon.svg" />
+    <link rel="preload" href="styling/fonts.css" as="style" />
+    <link rel="stylesheet" href="styling/fonts.css" />
+    
     <title>LibreSpeed - Stability Test</title>
+    <!-- prevent flash of wrong theme -->
+    <script>(function(){var t=localStorage.getItem('ls-theme');if(t)document.documentElement.setAttribute('data-theme',t);})();</script>
     <style type="text/css">
-      html,
-      body {
-        border: none;
-        padding: 0;
-        margin: 0;
-        background: #ffffff;
-        color: #202020;
+      /* theme tokens synced from index.html */
+      :root {
+        --bg: #07090f;
+        --panel: #0d1120;
+        --border: rgba(255,255,255,0.07);
+        --text: #eef2ff;
+        --muted: rgba(238,242,255,0.38);
+        --accent: #6060ff;
+        --accent-dim: rgba(0,0,0,0.1);
+        --chart-fill: rgba(96,96,170,0.15);
+        --chart-line: #6060aa;
+        --lost: #f87171;
+        --ok: #34d399;
+        --good: #a78bfa;
+        --poor: #f97316;
+        --bad: #f87171;
+        --none: #808080;
+        --btn-text: #6060aa;
       }
+
+      /* ── light theme ── */
+      [data-theme="light"] {
+        --bg: #e8eaf2;
+        --panel: #f4f5fa;
+        --border: rgba(0,0,0,0.08);
+        --text: #0f172a;
+        --muted: rgba(15,23,42,0.52);
+        --accent: #0891b2;
+        --accent-dim: rgba(0,0,0,0.05);
+        --chart-fill: rgba(8,145,178,0.15);
+        --chart-line: #0891b2;
+        --lost: #e74c3c;
+        --ok: #059669;
+        --good: #7c3aed;
+        --poor: #b45309;
+        --bad: #e74c3c;
+        --none: #808080;
+        --btn-text: #0891b2;
+      }
+      html { background: var(--bg); min-height: 100%; overflow-x: hidden; }
+
       body {
         text-align: center;
-        font-family: "Roboto", sans-serif;
+        font-family: 'Inter', system-ui, sans-serif;
+        color: var(--text);
+        min-height: 100vh;
+        overflow-x: hidden;
+        background:
+          radial-gradient(ellipse 100% 50% at 30% -5%,  var(--grad-1) 0%, transparent 55%),
+          radial-gradient(ellipse  70% 40% at 80% 110%, var(--grad-2) 0%, transparent 50%),
+          var(--bg);
       }
+
+
+      /* ── header ── */
+      header {
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 1.5rem 2rem;
+      }
+      header img {
+        height: 2rem;
+        opacity: 0.8;
+        transition: opacity 0.2s;
+      }
+      [data-theme="light"] header img {
+        background: rgba(7, 9, 15, 0.82);
+        padding: 0.3rem 0.7rem;
+        border-radius: 0.45rem;
+      }
+
       h1 {
-        color: #404040;
+        color: var(--text);
       }
-      nav {
-        margin-bottom: 1em;
-      }
-      nav a {
-        color: #6060aa;
-        text-decoration: none;
-        font-size: 0.95em;
-      }
-      nav a:hover {
-        text-decoration: underline;
-      }
+
       #controls {
         margin: 1em auto;
       }
@@ -40,13 +96,17 @@
         font-size: 1em;
         padding: 0.3em 0.5em;
         margin-right: 1em;
+        background: var(--panel);
+        color: var(--text);
+        border: 1px solid var(--border);
+        border-radius: 0.3em;
       }
       #startBtn {
         display: inline-block;
         margin: 0 auto;
-        color: #6060aa;
+        color: var(--btn-text);
         background-color: rgba(0, 0, 0, 0);
-        border: 0.15em solid #6060ff;
+        border: 0.15em solid var(--accent);
         border-radius: 0.3em;
         transition: all 0.3s;
         box-sizing: border-box;
@@ -55,13 +115,13 @@
         line-height: 2.7em;
         cursor: pointer;
         box-shadow:
-          0 0 0 rgba(0, 0, 0, 0.1),
-          inset 0 0 0 rgba(0, 0, 0, 0.1);
+          0 0 0 var(--accent-dim),
+          inset 0 0 0 var(--accent-dim);
       }
       #startBtn:hover {
         box-shadow:
-          0 0 2em rgba(0, 0, 0, 0.1),
-          inset 0 0 1em rgba(0, 0, 0, 0.1);
+          0 0 2em var(--accent),
+          inset 0 0 1em var(--accent);
       }
       #startBtn.disabled {
         color: #a0a0a0;
@@ -104,13 +164,13 @@
         cursor: pointer;
         margin-left: 0.5em;
         box-shadow:
-          0 0 0 rgba(0, 0, 0, 0.1),
-          inset 0 0 0 rgba(0, 0, 0, 0.1);
+          0 0 0 var(--accent-dim),
+          inset 0 0 0 var(--accent-dim);
       }
       #resetBtn:hover {
         box-shadow:
-          0 0 2em rgba(0, 0, 0, 0.1),
-          inset 0 0 1em rgba(0, 0, 0, 0.1);
+          0 0 2em var(--accent),
+          inset 0 0 1em var(--accent);
       }
       #serverArea {
         margin: 0.8em 0;
@@ -118,6 +178,10 @@
       #server {
         font-size: 1em;
         padding: 0.2em;
+        background: var(--panel);
+        color: var(--text);
+        border: 1px solid var(--border);
+        border-radius: 0.3em;
       }
       #test {
         margin-top: 2em;
@@ -139,16 +203,19 @@
         display: block;
         text-align: center;
         font-size: 1.4em;
+        color: var(--muted);
       }
       div.testArea2 div.meterText {
         display: inline-block;
         font-size: 2.5em;
+        color: var(--text);
       }
       div.meterText:empty:before {
         content: "0.00";
       }
       div.testArea2 div.unit {
         display: inline-block;
+        color: var(--muted);
       }
       #rating {
         font-size: 1.3em;
@@ -156,19 +223,19 @@
         margin: 0.5em 0;
       }
       #rating.great {
-        color: #2ecc71;
+        color: var(--ok);
       }
       #rating.good {
-        color: #27ae60;
+        color: var(--good);
       }
       #rating.poor {
-        color: #e67e22;
+        color: var(--poor);
       }
       #rating.bad {
-        color: #e74c3c;
+        color: var(--bad);
       }
       #rating.none {
-        color: #808080;
+        color: var(--none);
       }
       #chartContainer {
         margin: 1em auto;
@@ -179,9 +246,9 @@
       #pingChart {
         width: 100%;
         height: 280px;
-        border: 1px solid #e0e0e0;
+        border: 1px solid var(--border);
         border-radius: 4px;
-        background: #fafafa;
+        background: var(--panel);
       }
       #optionalControls {
         margin: 1.5em auto;
@@ -200,20 +267,20 @@
         font-size: 0.9em;
         padding: 0.4em 1em;
         cursor: pointer;
-        border: 1px solid #6060aa;
+        border: 1px solid var(--accent);
         background: none;
-        color: #6060aa;
+        color: var(--accent);
         border-radius: 0.3em;
       }
       #downloadCsvBtn:hover {
-        background: #6060aa;
+        background: var(--accent);
         color: #ffffff;
       }
       .footer {
         margin: 2em 0 1em;
       }
       .footer a {
-        color: #808080;
+        color: var(--muted);
         font-size: 0.85em;
       }
       @media all and (max-width: 40em) {
@@ -224,60 +291,79 @@
           height: 200px;
         }
       }
-      @media all and (prefers-color-scheme: dark) {
-        html,
-        body {
-          background: #202020;
-          color: #f4f4f4;
-          color-scheme: dark;
+      /* ── responsive ── */
+      @media (max-width: 700px) {
+        header { padding: 1rem 1.2rem; }
+        main { padding: 1.5rem 0.8rem 2.5rem; gap: 1.8rem; }
+        .gauges {
+          gap: 0.4rem 0.6rem;
+          max-width: 100%;
         }
-        h1 {
-          color: #e0e0e0;
-        }
-        nav a {
-          color: #9090ff;
-        }
-        #pingChart {
-          border-color: #404040;
-          background: #1a1a1a;
-        }
-        a {
-          color: #9090ff;
-        }
-        #startBtn {
-          color: #9090ff;
-          border-color: #7070ff;
-        }
-        #startBtn.disabled {
-          color: #707070;
-          border-color: #505050;
-        }
-        #startBtn.running {
-          background-color: #ff3030;
-          border-color: #ff6060;
-          color: #ffffff;
-        }
-        #resetBtn {
-          color: #a0a0a0;
-          border-color: #606060;
-        }
-        #downloadCsvBtn {
-          color: #9090ff;
-          border-color: #9090ff;
-        }
-        #downloadCsvBtn:hover {
-          background: #9090ff;
-          color: #202020;
-        }
-        .footer a {
-          color: #a0a0a0;
-        }
+        .gauge-wrap canvas { max-width: 100%; }
+        .gauge-wrap.sm canvas { max-width: 100%; }
+        #results { grid-template-columns: repeat(2, 1fr); gap: 0.7rem; }
+        #results [data-m=loss] { grid-column: 1 / -1; }
+        .r-card { padding: 1.2rem 0.6rem 1rem; }
+        .r-val { font-size: 2.4rem; }
+        .r-label { font-size: 0.8rem; }
+        .r-unit { font-size: 0.8rem; }
+        #btn-start { font-size: 1.2rem; padding: 1.1rem 4rem; }
+      }
+
+      @media (max-width: 420px) {
+        .gauges { gap: 0.3rem; }
+        .r-val { font-size: 2rem; }
+        #ip-info { font-size: 1rem; }
+      }
+
+       /* ── theme toggle (top-right of header) ── */
+      .theme-switch {
+        position: absolute;
+        right: 1.5rem;
+        top: 50%;
+        transform: translateY(-50%);
+        display: flex;
+        align-items: center;
+        cursor: pointer;
+        user-select: none;
+      }
+      .pill {
+        width: 2.4rem;
+        height: 1.3rem;
+        background: rgba(255,255,255,0.14);
+        border-radius: 100px;
+        position: relative;
+        transition: background 0.25s;
+      }
+      [data-theme="light"] .pill { background: var(--accent); }
+      .dot {
+        position: absolute;
+        top: 3px;
+        left: 3px;
+        width: 0.85rem;
+        height: 0.85rem;
+        border-radius: 50%;
+        background: rgba(255,255,255,0.75);
+        transition: transform 0.25s cubic-bezier(0.34,1.4,0.64,1);
+        box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+      }
+      [data-theme="light"] .dot {
+        transform: translateX(1.1rem);
+        background: #ffffff;
       }
     </style>
   </head>
   <body>
-    <h1>LibreSpeed - Stability Test</h1>
-    <nav><a href="./">&larr; Speed Test</a></nav>
+    <header>
+      <img src="images/logo.svg" alt="LibreSpeed" />
+      <label class="theme-switch" title="Toggle dark / light theme">
+        <input type="checkbox" id="theme-chk" hidden>
+        <span class="pill"><span class="dot"></span></span>
+      </label>
+    </header>
+    <nav><a href="index.html">&larr; Speed Test</a></nav>
+
+    
 
     <div id="controls">
       <select id="durationSelect">
@@ -308,17 +394,17 @@
       <div class="testGroup">
         <div class="testArea2">
           <div class="testName">Current</div>
-          <div id="statCurrent" class="meterText" style="color: #aa6060"></div>
+          <div id="statCurrent" class="meterText"></div>
           <div class="unit">ms</div>
         </div>
         <div class="testArea2">
           <div class="testName">Average</div>
-          <div id="statAvg" class="meterText" style="color: #aa6060"></div>
+          <div id="statAvg" class="meterText"></div>
           <div class="unit">ms</div>
         </div>
         <div class="testArea2">
           <div class="testName">Jitter</div>
-          <div id="statJitter" class="meterText" style="color: #aa6060"></div>
+          <div id="statJitter" class="meterText"></div>
           <div class="unit">ms</div>
         </div>
       </div>
@@ -372,6 +458,18 @@
     </div>
 
     <script type="text/javascript">
+
+      window.addEventListener('DOMContentLoaded', () => {
+        // ── theme toggle ────────────────────────────────────────────────────────────
+        var themeChk = document.getElementById('theme-chk');
+        themeChk.checked = document.documentElement.getAttribute('data-theme') === 'light';
+        themeChk.addEventListener('change', function () {
+          var next = themeChk.checked ? 'light' : 'dark';
+          document.documentElement.setAttribute('data-theme', next);
+          localStorage.setItem('ls-theme', next);
+        });
+      });
+
       function I(i) {
         return document.getElementById(i);
       }
@@ -393,12 +491,14 @@
       var localServerReady = false;
       var serverDiscoveryPending = false;
 
-      // Dark mode detection for canvas colors
-      var isDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+      // Theme detection for canvas colors (synced with the theme switch)
+      var isDark = document.documentElement.getAttribute('data-theme') !== 'light';
       try {
-        window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", function (e) {
-          isDark = e.matches;
-        });
+        if (window.matchMedia) {
+          window.matchMedia("(prefers-color-scheme: light)").addEventListener("change", function (e) {
+            isDark = e.matches !== true;
+          });
+        }
       } catch (e) {}
 
       // Chart constants
@@ -736,12 +836,12 @@
         var plotW = cw - padL - padR;
         var plotH = ch - padT - padB;
 
-        // colors based on theme
-        var lineColor = isDark ? "#9090FF" : "#6060AA";
-        var fillColor = isDark ? "rgba(144,144,255,0.15)" : "rgba(96,96,170,0.15)";
-        var gridColor = isDark ? "#404040" : "#E0E0E0";
-        var textColor = isDark ? "#A0A0A0" : "#808080";
-        var lostColor = "#e74c3c";
+        // colors based on theme (values resolve from :root / [data-theme="light"])
+        var lineColor = isDark ? "#9090FF" : "var(--chart-line)";
+        var fillColor = isDark ? "rgba(144,144,255,0.15)" : "var(--chart-fill)";
+        var gridColor = isDark ? "#404040" : "var(--border)";
+        var textColor = isDark ? "#A0A0A0" : "var(--muted)";
+        var lostColor = "var(--lost)";
         var thresholdColor = "rgba(231,76,60,0.6)";
 
         // determine visible time window
