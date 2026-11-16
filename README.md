@@ -7,13 +7,16 @@ No Flash, No Java, No WebSocket, No Bullshit.
 This is a very lightweight speed test implemented in JavaScript, using XMLHttpRequest and Web Workers.
 
 ## Try it
+
 [Take a speed test](https://speedtest.zzz.cat)
 
 ## Compatibility
+
 All modern browsers are supported: IE11, latest Edge, latest Chrome, latest Firefox, latest Safari.
 Works with mobile versions too.
 
 ## Features
+
 * Download
 * Upload
 * Ping
@@ -28,6 +31,7 @@ Works with mobile versions too.
 * ID obfuscation for test result privacy (optional)
 
 ### IP Detection
+
 * Client IP detection with proxy header chain support (X-Forwarded-For, X-Real-IP, Client-IP, CF-Connecting-IPv6)
 * ISP and location detection via ipinfo.io API with offline GeoIP database fallback (MaxMind .mmdb)
 * Private/special IP detection (including ULA IPv6 and CGNAT)
@@ -36,6 +40,7 @@ Works with mobile versions too.
 ![Screencast](https://speedtest.zzz.cat/speedtest.webp)
 
 ## Server requirements
+
 * Any [Go supported platforms](https://github.com/golang/go/wiki/MinimumRequirements) (Go 1.21+)
 * SQLite, BoltDB, PostgreSQL, MySQL or MSSQL database to store test results (optional)
 * No external dependencies — single binary deployment
@@ -54,6 +59,7 @@ Works with mobile versions too.
 ### Use Ansible for automatic installation
 
 You can use an Ansible role for installing speedtest-go easily. You can find the role on the [Ansible galaxy](https://galaxy.ansible.com/flymia/ansible_speedtest_go). There is a [separate repository](https://github.com/flymia/ansible-speedtest_go) for documentation about the Ansible role.
+
 ### Compile from source
 
 You need Go 1.21+ to compile the binary.
@@ -161,6 +167,7 @@ attempt to fetch your current network's ISP info for distance calculation betwee
 This action will only be taken once, and cached for later use.
 
 ## License
+
 Copyright (C) 2016-2020 Federico Dossena
 Copyright (C) 2020 Maddie Zhan
 
