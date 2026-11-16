@@ -193,6 +193,7 @@ func pages(fs http.FileSystem, BaseURL string) http.HandlerFunc {
 // sendPHPCORSHeaders sets CORS headers matching the PHP backend's ?cors parameter behavior.
 // This is for API compatibility with the PHP version; the global CORS middleware already handles CORS.
 func sendPHPCORSHeaders(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Timing-Allow-Origin", "*")
 	if r.FormValue("cors") == "true" {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST")
