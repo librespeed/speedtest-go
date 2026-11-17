@@ -84,6 +84,8 @@ services:
     #user: "1000:1000" # set the non-root user and group to run container
 ```
 
+Please note the endpoints in server-list.json are third-party servers and may become stale, change or go offline. Always verify reachability. If you copy entries into your own list, keep the `id` values unique to avoid duplicate or ambiguous selector entries.
+
 
 ### Compile from source
 
