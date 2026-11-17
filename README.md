@@ -77,7 +77,7 @@ services:
     volumes:
       # provide non default settings, e.g. to specify assets_path="assets" for custom server-list.json
       - ./settings.toml:/app/settings.toml
-      # an optional part, prepare ./server-list.json from server-list_example.json if you need non local test servers
+      # an optional part, prepare ./server-list.json from server-list.json if you need non local test servers
       #- ./server-list.json:/app/assets/server-list.json # ensure assets_path="assets" was set
       # for non-root container consider to provide RW volumes for `/app/idObfuscation_salt.bin` and `/app/speedtest.db` files.
     ports:
