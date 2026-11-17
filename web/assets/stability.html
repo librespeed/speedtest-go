@@ -836,11 +836,15 @@
         var plotH = ch - padT - padB;
 
         // colors based on theme (values resolve from :root / [data-theme="light"])
-        var lineColor = isDark ? "#9090FF" : "var(--chart-line)";
-        var fillColor = isDark ? "rgba(144,144,255,0.15)" : "var(--chart-fill)";
-        var gridColor = isDark ? "#404040" : "var(--border)";
-        var textColor = isDark ? "#A0A0A0" : "var(--muted)";
-        var lostColor = "var(--lost)";
+        var getVar = function(varName) {
+          return getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
+        };
+        lineColor = getVar('--chart-line');
+        fillColor = getVar('--chart-fill');
+        gridColor = getVar('--border');
+        textColor = getVar('--muted');
+        lostColor = getVar('--lost');
+      
         var thresholdColor = "rgba(231,76,60,0.6)";
 
         // determine visible time window
