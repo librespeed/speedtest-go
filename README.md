@@ -81,7 +81,7 @@ services:
       #- ./server-list.json:/app/assets/server-list.json # ensure assets_path="assets" was set 
     ports:
       - "8989:8989"
-    #user: "1000:1000" # set tour non root user and group to run container
+    #user: "1000:1000" # set the non-root user and group to run container
 ```
 
 
