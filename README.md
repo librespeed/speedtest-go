@@ -79,13 +79,19 @@ services:
       - ./settings.toml:/app/settings.toml
       # an optional part, prepare ./server-list.json from server-list_example.json if you need non local test servers
       #- ./server-list.json:/app/assets/server-list.json # ensure assets_path="assets" was set
+      # for non-root container consider to provide RW volumes for `/app/idObfuscation_salt.bin` and `/app/speedtest.db` files.
     ports:
       - "8989:8989"
-    #user: "1000:1000" # set the non-root user and group to run container
+    # set the non-root user and group to run container and see section regarding permissions for non-root containers
+    #user: "1000:1000"
 ```
 
 Please note the endpoints in server-list.json are third-party servers and may become stale, change or go offline. Always verify reachability. If you copy entries into your own list, keep the `id` values unique to avoid duplicate or ambiguous selector entries.
 
+For non-root container please pay attention to file permissions for the following cases:
+
+* ID obfuscator writes data to the `/app/idObfuscation_salt.bin` which should be writable
+* persistence storage with `bolt` and `sqlite` engines should be pointed to the writable-volume (default is `/app/speedtest.db`)
 
 ### Compile from source
 
