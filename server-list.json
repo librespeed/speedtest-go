@@ -1,6 +1,6 @@
 [
   {
-    "name": "Amsterdam, Netherlands",
+    "name": "Amsterdam, Netherlands (Clouvider)",
     "server": "//ams.speedtest.clouvider.net/backend",
     "id": 51,
     "dlURL": "garbage.php",
@@ -22,7 +22,7 @@
     "sponsorURL": "https://github.com/SudoDios"
   },
   {
-    "name": "Amsterdam, Netherlands",
+    "name": "Amsterdam, Netherlands (Sharktech)",
     "server": "https://amsspeed.sharktech.net",
     "id": 94,
     "dlURL": "backend/garbage.php",
@@ -297,7 +297,7 @@
     "sponsorURL": "https://kamilszczepanski.com"
   },
   {
-    "name": "Prague, Czech Republic",
+    "name": "Prague, Czech Republic (CESNET)",
     "server": "//speedtest.cesnet.cz",
     "id": 79,
     "dlURL": "backend/garbage.php",
@@ -308,7 +308,7 @@
     "sponsorURL": "https://www.cesnet.cz"
   },
   {
-    "name": "Prague, Czech Republic",
+    "name": "Prague, Czech Republic (Turris)",
     "server": "//librespeed.turris.cz",
     "id": 85,
     "dlURL": "backend/garbage.php",
