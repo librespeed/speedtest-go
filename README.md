@@ -78,7 +78,7 @@ services:
       # provide non default settings, e.g. to specify assets_path="assets" for custom server-list.json
       - ./settings.toml:/app/settings.toml
       # an optional part, prepare ./server-list.json from server-list_example.json if you need non local test servers
-      #- ./server-list.json:/app/assets/server-list.json # ensure assets_path="assets" was set 
+      #- ./server-list.json:/app/assets/server-list.json # ensure assets_path="assets" was set
     ports:
       - "8989:8989"
     #user: "1000:1000" # set the non-root user and group to run container
@@ -141,7 +141,7 @@ You need Go 1.21+ to compile the binary.
     server_lng=0
     # ipinfo.io API key, if applicable
     ipinfo_api_key=""
-   
+
     # assets directory path, defaults to `assets` in the same directory
     # if the path cannot be found, embedded default assets will be used
     assets_path="./assets"
