@@ -75,8 +75,10 @@ services:
     image: ghcr.io/librespeed/speedtest-go:latest
     restart: unless-stopped
     volumes:
-      - ./settings.toml:/opt/settings.toml
-      - ./server-list.json:/opt/assets/server-list.json # ensure assets_path="assets" was set 
+      # provide non default settings, e.g. to specify assets_path="assets" for custom server-list.json
+      - ./settings.toml:/app/settings.toml
+      # an optional part, prepare ./server-list.json from server-list_example.json if you need non local test servers
+      #- ./server-list.json:/app/assets/server-list.json # ensure assets_path="assets" was set 
     ports:
       - "8989:8989"
     #user: "1000:1000" # set tour non root user and group to run container
