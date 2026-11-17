@@ -1,0 +1,145 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version tag to release, for example v1.1.7. Required unless dry_run is true."
+        required: false
+      draft:
+        description: "Upload the assets to a draft release. Publish it by hand from the releases page."
+        type: boolean
+        default: true
+      dry_run:
+        description: "Build from master only. Do not create a release."
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  guard:
+    name: Check the branch
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Require the master branch
+        env:
+          REF: ${{ github.ref }}
+        run: |
+          set -euo pipefail
+          if [ "$REF" != "refs/heads/master" ]; then
+            echo "::error::Start this workflow from the master branch, got $REF"
+            exit 1
+          fi
+
+  release:
+    name: Release
+    needs: guard
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    # Add required reviewers to this environment in the repository settings
+    # to gate every release behind a manual approval.
+    environment: release
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          ref: master
+          # GoReleaser reads the tag that precedes the current one to write
+          # the changelog, so the whole history and the tags are needed.
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - name: Install GoReleaser
+        uses: goreleaser/goreleaser-action@v7
+        with:
+          version: "~> v2"
+          install-only: true
+
+      - name: Check the GoReleaser config
+        run: goreleaser check
+
+      - name: Validate the version and the tag
+        if: ${{ !inputs.dry_run }}
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          if [ -z "$VERSION" ]; then
+            echo "::error::The version input is required when dry_run is false"
+            exit 1
+          fi
+          if ! [[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Invalid version $VERSION, expected vX.Y.Z"
+            exit 1
+          fi
+
+          if ! git rev-parse -q --verify "refs/tags/$VERSION^{commit}" >/dev/null; then
+            echo "::error::Tag $VERSION does not exist. Push the tag first."
+            exit 1
+          fi
+
+          if ! git merge-base --is-ancestor "refs/tags/$VERSION^{commit}" origin/master; then
+            echo "::error::Tag $VERSION is not on the master branch"
+            exit 1
+          fi
+
+          latest="$(git tag -l 'v*' --sort=-v:refname | head -n 1)"
+          if [ -n "$latest" ] && [ "$latest" != "$VERSION" ]; then
+            echo "::error::Tag $VERSION is not the latest tag, the latest is $latest"
+            exit 1
+          fi
+
+          echo "Commit to release: $(git rev-parse --short "refs/tags/$VERSION^{commit}")"
+
+      - name: Check out the tag
+        if: ${{ !inputs.dry_run }}
+        env:
+          VERSION: ${{ inputs.version }}
+        run: git checkout --detach "refs/tags/$VERSION"
+
+      - name: Build without publishing
+        if: ${{ inputs.dry_run }}
+        uses: goreleaser/goreleaser-action@v7
+        with:
+          version: "~> v2"
+          args: release --snapshot --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload the build artifacts
+        if: ${{ inputs.dry_run }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: dist-snapshot
+          path: dist/
+          retention-days: 7
+
+      - name: Publish the release
+        if: ${{ !inputs.dry_run }}
+        uses: goreleaser/goreleaser-action@v7
+        with:
+          version: "~> v2"
+          args: release --clean ${{ inputs.draft && '--draft' || '' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Delete the partial release on failure
+        if: failure() && !inputs.dry_run
+        env:
+          VERSION: ${{ inputs.version }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # The tag stays, it is pushed by hand. Remove only the release,
+          # so the workflow can run again for the same version.
+          gh release delete "$VERSION" --yes || true

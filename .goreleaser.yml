@@ -31,8 +31,6 @@ builds:
         goarch: arm
       - goos: windows
         goarch: arm64
-    hooks:
-      post: upx -9 "{{ .Path }}"
   - main: ./main.go
     id: speedtest-backend-darwin
     binary: speedtest-backend
@@ -87,6 +85,16 @@ archives:
       - README.md
       - LICENSE
       - settings.toml
+upx:
+  # FreeBSD and macOS binaries are left alone: UPX cannot pack the macOS
+  # ones, and on the FreeBSD ones it either fails or reports an internal
+  # error that aborts the release.
+  - ids: [speedtest-backend]
+    goos:
+      - linux
+      - windows
+    compress: "9"
+    enabled: true
 checksum:
   name_template: 'checksums.txt'
 changelog:
