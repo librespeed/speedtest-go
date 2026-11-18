@@ -737,7 +737,6 @@
         // request final status, then stop listening to avoid re-entrancy spin
         if (worker) {
           var stoppedWorker = worker;
-          var onmessage = worker.onmessage;
           worker.onmessage = null; // detach so the echo of the final state cannot re-trigger stopTest()
           stoppedWorker.postMessage("status");
           setTimeout(function () {
