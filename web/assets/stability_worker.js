@@ -1,6 +1,6 @@
 /*
 	LibreSpeed - Stability Test Worker
-	https://github.com/librespeed/speedtest/
+	https://github.com/librespeed/speedtest-go/
 	GNU LGPLv3 License
 */
 
