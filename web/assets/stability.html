@@ -849,11 +849,11 @@
         var getVar = function(varName) {
           return getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
         };
-        lineColor = getVar('--chart-line');
-        fillColor = getVar('--chart-fill');
-        gridColor = getVar('--border');
-        textColor = getVar('--muted');
-        lostColor = getVar('--lost');
+        var lineColor = getVar('--chart-line');
+        var fillColor = getVar('--chart-fill');
+        var gridColor = getVar('--border');
+        var textColor = getVar('--muted');
+        var lostColor = getVar('--lost');
       
         var thresholdColor = "rgba(231,76,60,0.6)";
 
