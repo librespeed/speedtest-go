@@ -498,16 +498,6 @@
       var localServerReady = false;
       var serverDiscoveryPending = false;
 
-      // Theme detection for canvas colors (synced with the theme switch)
-      var isDark = document.documentElement.getAttribute('data-theme') !== 'light';
-      try {
-        if (window.matchMedia) {
-          window.matchMedia("(prefers-color-scheme: light)").addEventListener("change", function (e) {
-            isDark = e.matches !== true;
-          });
-        }
-      } catch (e) {}
-
       // Chart constants
       var VISIBLE_SECONDS = 60;
       var CHART_PADDING_LEFT = 50;
