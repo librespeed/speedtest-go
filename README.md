@@ -65,7 +65,7 @@ You can use an Ansible role for installing speedtest-go easily. You can find the
 A `ghcr.io/librespeed/speedtest-go` image may be used to run speedtest-go in container.
 (!) TODO: fix public visibility of `ghcr.io/librespeed/speedtest-go` packages (see [PR#65](https://github.com/librespeed/speedtest-go/issues/65) ).
 Container exposes `8989` TCP port. Container may be run from non root user (see `--user=<user_id>:<group_id>` docker arg or `user: "<user_id>:<group_id>` Docker Compose settings).
-Finally mount volume should be used to adjust custom settings (`/opt/settings.toml` container path) or server list (`/opt/assets/server-list.json` container path).
+Finally mount volume should be used to adjust custom settings (`/app/settings.toml` container path) or server list (`/app/assets/server-list.json` container path).
 
 An example of docker compose descriptor:
 
