@@ -474,6 +474,7 @@
           var next = themeChk.checked ? 'light' : 'dark';
           document.documentElement.setAttribute('data-theme', next);
           localStorage.setItem('ls-theme', next);
+          drawChart();
         });
       });
 
@@ -815,7 +816,34 @@
       }
 
       // Canvas chart rendering
+      // Chart color cache: resolved once per theme, refreshed only when the
+      // theme actually changes (not every animation frame). Colors are read
+      // by drawChart() to avoid repeated getComputedStyle() calls.
+      var chartColors = {
+        lineColor: '',
+        fillColor: '',
+        gridColor: '',
+        textColor: '',
+        lostColor: '',
+      };
+      var lastChartTheme = null;
+
+      function refreshChartColors() {
+        var theme = document.documentElement.getAttribute('data-theme');
+        if (theme === lastChartTheme) return;
+        lastChartTheme = theme;
+        var getVar = function(varName) {
+          return getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
+        };
+        chartColors.lineColor = getVar('--chart-line');
+        chartColors.fillColor = getVar('--chart-fill');
+        chartColors.gridColor = getVar('--border');
+        chartColors.textColor = getVar('--muted');
+        chartColors.lostColor = getVar('--lost');
+      }
+
       function drawChart() {
+        refreshChartColors();
         var canvas = I("pingChart");
         var ctx = canvas.getContext("2d");
         var dp = window.devicePixelRatio || 1;
@@ -834,17 +862,13 @@
         var plotW = cw - padL - padR;
         var plotH = ch - padT - padB;
 
-        // colors based on theme (values resolve from :root / [data-theme="light"])
-        var getVar = function(varName) {
-          return getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
-        };
-        var lineColor = getVar('--chart-line');
-        var fillColor = getVar('--chart-fill');
-        var gridColor = getVar('--border');
-        var textColor = getVar('--muted');
-        var lostColor = getVar('--lost');
-      
         var thresholdColor = "rgba(231,76,60,0.6)";
+
+        var lineColor = chartColors.lineColor;
+        var fillColor = chartColors.fillColor;
+        var gridColor = chartColors.gridColor;
+        var textColor = chartColors.textColor;
+        var lostColor = chartColors.lostColor;
 
         // determine visible time window
         var data = allPingData;
