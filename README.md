@@ -7,13 +7,16 @@ No Flash, No Java, No WebSocket, No Bullshit.
 This is a very lightweight speed test implemented in JavaScript, using XMLHttpRequest and Web Workers.
 
 ## Try it
+
 [Take a speed test](https://speedtest.zzz.cat)
 
 ## Compatibility
+
 All modern browsers are supported: IE11, latest Edge, latest Chrome, latest Firefox, latest Safari.
 Works with mobile versions too.
 
 ## Features
+
 * Download
 * Upload
 * Ping
@@ -28,6 +31,7 @@ Works with mobile versions too.
 * ID obfuscation for test result privacy (optional)
 
 ### IP Detection
+
 * Client IP detection with proxy header chain support (X-Forwarded-For, X-Real-IP, Client-IP, CF-Connecting-IPv6)
 * ISP and location detection via ipinfo.io API with offline GeoIP database fallback (MaxMind .mmdb)
 * Private/special IP detection (including ULA IPv6 and CGNAT)
@@ -36,6 +40,7 @@ Works with mobile versions too.
 ![Screencast](https://speedtest.zzz.cat/speedtest.webp)
 
 ## Server requirements
+
 * Any [Go supported platforms](https://github.com/golang/go/wiki/MinimumRequirements) (Go 1.21+)
 * SQLite, BoltDB, PostgreSQL, MySQL or MSSQL database to store test results (optional)
 * No external dependencies — single binary deployment
@@ -54,6 +59,40 @@ Works with mobile versions too.
 ### Use Ansible for automatic installation
 
 You can use an Ansible role for installing speedtest-go easily. You can find the role on the [Ansible galaxy](https://galaxy.ansible.com/flymia/ansible_speedtest_go). There is a [separate repository](https://github.com/flymia/ansible-speedtest_go) for documentation about the Ansible role.
+
+### Docker/Docker Compose
+
+A `ghcr.io/librespeed/speedtest-go` image may be used to run speedtest-go in container.
+(!) TODO: fix public visibility of `ghcr.io/librespeed/speedtest-go` packages (see [PR#65](https://github.com/librespeed/speedtest-go/issues/65) ).
+Container exposes `8989` TCP port. Container may be run from non root user (see `--user=<user_id>:<group_id>` docker arg or `user: "<user_id>:<group_id>` Docker Compose settings).
+Finally mount volume should be used to adjust custom settings (`/app/settings.toml` container path) or server list (`/app/assets/server-list.json` container path).
+
+An example of docker compose descriptor:
+
+```
+services:
+  speedtest:
+    image: ghcr.io/librespeed/speedtest-go:latest
+    restart: unless-stopped
+    volumes:
+      # provide your customized settings, e.g. to specify assets_path="assets" for custom server-list.json
+      - ./settings.toml:/app/settings.toml
+      # an optional part, prepare your customized ./server-list.json from server-list.json if you need non local test servers
+      #- ./server-list.json:/app/assets/server-list.json # ensure assets_path="assets" was set
+      # for non-root container consider to provide RW volumes for `/app/idObfuscation_salt.bin` and `/app/speedtest.db` files.
+    ports:
+      - "8989:8989"
+    # set the non-root user and group to run container and see section regarding permissions for non-root containers
+    #user: "1000:1000"
+```
+
+Please note the endpoints in server-list.json are third-party servers and may become stale, change or go offline. Always verify reachability. If you copy entries into your own list, keep the `id` values unique to avoid duplicate or ambiguous selector entries.
+
+For non-root container please pay attention to file permissions for the following cases:
+
+* ID obfuscator writes data to the `/app/idObfuscation_salt.bin` which should be writable
+* persistence storage with `bolt` and `sqlite` engines should be pointed to the writable-volume (default is `/app/speedtest.db`)
+
 ### Compile from source
 
 You need Go 1.21+ to compile the binary.
@@ -110,7 +149,7 @@ You need Go 1.21+ to compile the binary.
     server_lng=0
     # ipinfo.io API key, if applicable
     ipinfo_api_key=""
-   
+
     # assets directory path, defaults to `assets` in the same directory
     # if the path cannot be found, embedded default assets will be used
     assets_path="./assets"
@@ -161,6 +200,7 @@ attempt to fetch your current network's ISP info for distance calculation betwee
 This action will only be taken once, and cached for later use.
 
 ## License
+
 Copyright (C) 2016-2020 Federico Dossena
 Copyright (C) 2020 Maddie Zhan
 
