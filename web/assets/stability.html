@@ -830,7 +830,7 @@
 
       function refreshChartColors() {
         var theme = document.documentElement.getAttribute('data-theme');
-        if (theme === lastChartTheme) return;
+        if (chartColors.lineColor && theme === lastChartTheme) return;
         lastChartTheme = theme;
         var getVar = function(varName) {
           return getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
