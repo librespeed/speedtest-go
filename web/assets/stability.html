@@ -117,6 +117,9 @@
         width: 8em;
         height: 3em;
         line-height: 2.7em;
+        font-family: inherit;
+        font-size: inherit;
+        padding: 0;
         cursor: pointer;
         box-shadow:
           0 0 0 var(--accent-dim),
@@ -165,6 +168,9 @@
         width: 6em;
         height: 3em;
         line-height: 2.7em;
+        font-family: inherit;
+        font-size: inherit;
+        padding: 0;
         cursor: pointer;
         margin-left: 0.5em;
         box-shadow:
@@ -268,6 +274,7 @@
       }
       #downloadCsvBtn {
         margin-top: 0.8em;
+        font: inherit;
         font-size: 0.9em;
         padding: 0.4em 1em;
         cursor: pointer;
@@ -493,16 +500,6 @@
       var selectedServer = null;
       var localServerReady = false;
       var serverDiscoveryPending = false;
-
-      // Theme detection for canvas colors (synced with the theme switch)
-      var isDark = document.documentElement.getAttribute('data-theme') !== 'light';
-      try {
-        if (window.matchMedia) {
-          window.matchMedia("(prefers-color-scheme: light)").addEventListener("change", function (e) {
-            isDark = e.matches !== true;
-          });
-        }
-      } catch (e) {}
 
       // Chart constants
       var VISIBLE_SECONDS = 60;
@@ -743,7 +740,6 @@
         // request final status, then stop listening to avoid re-entrancy spin
         if (worker) {
           var stoppedWorker = worker;
-          var onmessage = worker.onmessage;
           worker.onmessage = null; // detach so the echo of the final state cannot re-trigger stopTest()
           stoppedWorker.postMessage("status");
           setTimeout(function () {
@@ -822,7 +818,34 @@
       }
 
       // Canvas chart rendering
+      // Chart color cache: resolved once per theme, refreshed only when the
+      // theme actually changes (not every animation frame). Colors are read
+      // by drawChart() to avoid repeated getComputedStyle() calls.
+      var chartColors = {
+        lineColor: '',
+        fillColor: '',
+        gridColor: '',
+        textColor: '',
+        lostColor: '',
+      };
+      var lastChartTheme = null;
+
+      function refreshChartColors() {
+        var theme = document.documentElement.getAttribute('data-theme');
+        if (chartColors.lineColor && theme === lastChartTheme) return;
+        lastChartTheme = theme;
+        var getVar = function(varName) {
+          return getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
+        };
+        chartColors.lineColor = getVar('--chart-line');
+        chartColors.fillColor = getVar('--chart-fill');
+        chartColors.gridColor = getVar('--border');
+        chartColors.textColor = getVar('--muted');
+        chartColors.lostColor = getVar('--lost');
+      }
+
       function drawChart() {
+        refreshChartColors();
         var canvas = I("pingChart");
         var ctx = canvas.getContext("2d");
         var dp = window.devicePixelRatio || 1;
@@ -841,17 +864,13 @@
         var plotW = cw - padL - padR;
         var plotH = ch - padT - padB;
 
-        // colors based on theme (values resolve from :root / [data-theme="light"])
-        var getVar = function(varName) {
-          return getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
-        };
-        lineColor = getVar('--chart-line');
-        fillColor = getVar('--chart-fill');
-        gridColor = getVar('--border');
-        textColor = getVar('--muted');
-        lostColor = getVar('--lost');
-      
         var thresholdColor = "rgba(231,76,60,0.6)";
+
+        var lineColor = chartColors.lineColor;
+        var fillColor = chartColors.fillColor;
+        var gridColor = chartColors.gridColor;
+        var textColor = chartColors.textColor;
+        var lostColor = chartColors.lostColor;
 
         // determine visible time window
         var data = allPingData;
