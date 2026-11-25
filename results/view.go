@@ -2,6 +2,7 @@ package results
 
 import (
 	"encoding/json"
+	"fmt"
 	"html/template"
 	"net/http"
 	"strconv"
@@ -52,18 +53,9 @@ func ViewPage(w http.ResponseWriter, r *http.Request) {
 
 	// Parse ISP info
 	var ispInfo struct {
-		ProcessedString string `json:"processedString"`
-		RawISPInfo      struct {
-			IP        string `json:"ip"`
-			Hostname  string `json:"hostname"`
-			City      string `json:"city"`
-			Region    string `json:"region"`
-			Country   string `json:"country"`
-			Loc       string `json:"loc"`
-			Org       string `json:"org"`
-			Postal    string `json:"postal"`
-			Timezone  string `json:"timezone"`
-		} `json:"rawIspInfo"`
+		ProcessedString string         `json:"processedString"`
+		RawISPInfo      IPInfoResponse `json:"rawIspInfo"`
+		Location        *Location      `json:"location"`
 	}
 
 	if record.ISPInfo != "" {
@@ -127,6 +119,41 @@ func ViewPage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Prepare data for template
+	city := ispInfo.RawISPInfo.City
+	region := ispInfo.RawISPInfo.Region
+	country := ispInfo.RawISPInfo.Country
+	countryName := ""
+	postal := ispInfo.RawISPInfo.Postal
+	timezone := ispInfo.RawISPInfo.Timezone
+	latitude := ""
+	longitude := ""
+	locationSource := ""
+	if ispInfo.Location != nil {
+		if ispInfo.Location.City != "" {
+			city = ispInfo.Location.City
+		}
+		if ispInfo.Location.Region != "" {
+			region = ispInfo.Location.Region
+		}
+		if ispInfo.Location.Country != "" {
+			country = ispInfo.Location.Country
+		}
+		countryName = ispInfo.Location.CountryName
+		if ispInfo.Location.Postal != "" {
+			postal = ispInfo.Location.Postal
+		}
+		if ispInfo.Location.Timezone != "" {
+			timezone = ispInfo.Location.Timezone
+		}
+		if ispInfo.Location.Latitude != nil {
+			latitude = fmt.Sprintf("%.6f", *ispInfo.Location.Latitude)
+		}
+		if ispInfo.Location.Longitude != nil {
+			longitude = fmt.Sprintf("%.6f", *ispInfo.Location.Longitude)
+		}
+		locationSource = ispInfo.Location.Source
+	}
+
 	data := struct {
 		BaseURL   string
 		Download  string
@@ -140,6 +167,12 @@ func ViewPage(w http.ResponseWriter, r *http.Request) {
 			City            string
 			Region          string
 			Country         string
+			CountryName     string
+			Postal          string
+			TimeZone        string
+			Latitude        string
+			Longitude       string
+			Source          string
 			Organization    string
 		}
 		Grade       gradeInfo
@@ -160,13 +193,25 @@ func ViewPage(w http.ResponseWriter, r *http.Request) {
 			City            string
 			Region          string
 			Country         string
+			CountryName     string
+			Postal          string
+			TimeZone        string
+			Latitude        string
+			Longitude       string
+			Source          string
 			Organization    string
 		}{
 			ProcessedString: ispInfo.ProcessedString,
-			City:            ispInfo.RawISPInfo.City,
-			Region:          ispInfo.RawISPInfo.Region,
-			Country:         ispInfo.RawISPInfo.Country,
-			Organization:    ispInfo.RawISPInfo.Org,
+			City:            city,
+			Region:          region,
+			Country:         country,
+			CountryName:     countryName,
+			Postal:          postal,
+			TimeZone:        timezone,
+			Latitude:        latitude,
+			Longitude:       longitude,
+			Source:          locationSource,
+			Organization:    ispInfo.RawISPInfo.Organization,
 		},
 		Grade:       grade,
 		Latency:     record.LatencyUnderload,
@@ -464,6 +509,36 @@ const viewTemplate = `
                 <div class="info-item">
                     <span class="info-label">Country</span>
                     <span class="info-value">{{ .ISP.Country }}</span>
+                </div>
+                {{ end }}
+                {{ if .ISP.CountryName }}
+                <div class="info-item">
+                    <span class="info-label">Country Name</span>
+                    <span class="info-value">{{ .ISP.CountryName }}</span>
+                </div>
+                {{ end }}
+                {{ if .ISP.Postal }}
+                <div class="info-item">
+                    <span class="info-label">Postal</span>
+                    <span class="info-value">{{ .ISP.Postal }}</span>
+                </div>
+                {{ end }}
+                {{ if .ISP.TimeZone }}
+                <div class="info-item">
+                    <span class="info-label">Timezone</span>
+                    <span class="info-value">{{ .ISP.TimeZone }}</span>
+                </div>
+                {{ end }}
+                {{ if and .ISP.Latitude .ISP.Longitude }}
+                <div class="info-item">
+                    <span class="info-label">Approximate IP Coordinates</span>
+                    <span class="info-value">{{ .ISP.Latitude }}, {{ .ISP.Longitude }}</span>
+                </div>
+                {{ end }}
+                {{ if .ISP.Source }}
+                <div class="info-item">
+                    <span class="info-label">Location Source</span>
+                    <span class="info-value">{{ .ISP.Source }}</span>
                 </div>
                 {{ end }}
             </div>

@@ -1,6 +1,7 @@
 package results
 
 import (
+	"encoding/json"
 	"testing"
 )
 
@@ -75,11 +76,11 @@ func TestIPRedaction(t *testing.T) {
 
 func TestIPRedactionChain(t *testing.T) {
 	tests := []struct {
-		name      string
-		ispInfo   string
-		logs      string
-		wantISP   string
-		wantLogs  string
+		name     string
+		ispInfo  string
+		logs     string
+		wantISP  string
+		wantLogs string
 	}{
 		{
 			name:     "IPv4 client: addresses and hostname redacted",
@@ -117,5 +118,113 @@ func TestIPRedactionChain(t *testing.T) {
 				t.Errorf("logs\ngot:  %s\nwant: %s", logs, tt.wantLogs)
 			}
 		})
+	}
+}
+
+func TestLegacyISPPayloadCompatibility(t *testing.T) {
+	tests := []struct {
+		name    string
+		payload string
+	}{
+		{
+			name:    "legacy object",
+			payload: `{"processedString":"128.94.2.134 - Microsoft Corporation, US","rawIspInfo":{"ip":"128.94.2.134","city":"Boydton","region":"Virginia","country":"US","loc":"36.6676,-78.3875","org":"AS8075 Microsoft Corporation"}}`,
+		},
+		{
+			name:    "empty string raw payload",
+			payload: `{"processedString":"128.94.2.134","rawIspInfo":"","location":null}`,
+		},
+		{
+			name:    "null raw payload",
+			payload: `{"processedString":"128.94.2.134","rawIspInfo":null}`,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			var result Result
+			err := json.Unmarshal([]byte(test.payload), &result)
+			if err != nil {
+				t.Fatalf("legacy payload should remain decodable: %v", err)
+			}
+			if result.ProcessedString == "" {
+				t.Fatal("processedString was lost")
+			}
+		})
+	}
+
+	location := &Location{
+		City:        "Boydton",
+		Region:      "Virginia",
+		Country:     "US",
+		CountryName: "United States",
+		Postal:      "23917",
+		Timezone:    "America/New_York",
+		Source:      "ipinfo",
+	}
+	latitude := 36.6676
+	longitude := -78.3875
+	location.Latitude = &latitude
+	location.Longitude = &longitude
+
+	payload, err := json.Marshal(Result{
+		ProcessedString: "128.94.2.134 - Microsoft Corporation, US",
+		RawISPInfo: IPInfoResponse{
+			IP:           "128.94.2.134",
+			City:         "Boydton",
+			Region:       "Virginia",
+			Country:      "US",
+			Location:     "36.6676,-78.3875",
+			Organization: "AS8075 Microsoft Corporation",
+			Postal:       "23917",
+			Timezone:     "America/New_York",
+		},
+		Location: location,
+	})
+	if err != nil {
+		t.Fatalf("marshal structured payload: %v", err)
+	}
+
+	var decoded map[string]json.RawMessage
+	if err := json.Unmarshal(payload, &decoded); err != nil {
+		t.Fatalf("decode payload map: %v", err)
+	}
+	if _, ok := decoded["processedString"]; !ok {
+		t.Fatal("processedString missing from structured payload")
+	}
+	if _, ok := decoded["rawIspInfo"]; !ok {
+		t.Fatal("rawIspInfo missing from structured payload")
+	}
+	if _, ok := decoded["location"]; !ok {
+		t.Fatal("location missing from structured payload")
+	}
+
+	var locationObject map[string]json.RawMessage
+	if err := json.Unmarshal(decoded["location"], &locationObject); err != nil {
+		t.Fatalf("decode location object: %v", err)
+	}
+	for _, allowed := range []string{
+		"city", "region", "country", "countryName", "postal", "timezone",
+		"latitude", "longitude", "source",
+	} {
+		delete(locationObject, allowed)
+	}
+	if len(locationObject) != 0 {
+		t.Fatalf("location object contains unexpected fields: %#v", locationObject)
+	}
+
+	legacyOnlyPayload, err := json.Marshal(Result{
+		ProcessedString: "128.94.2.134",
+		RawISPInfo:      IPInfoResponse{},
+	})
+	if err != nil {
+		t.Fatalf("marshal legacy-only payload: %v", err)
+	}
+	var legacyOnly map[string]json.RawMessage
+	if err := json.Unmarshal(legacyOnlyPayload, &legacyOnly); err != nil {
+		t.Fatalf("decode legacy-only payload: %v", err)
+	}
+	if _, ok := legacyOnly["location"]; ok {
+		t.Fatal("nil location should be omitted")
 	}
 }

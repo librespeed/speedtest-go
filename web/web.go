@@ -299,14 +299,15 @@ func getIP(conf *config.Config) http.HandlerFunc {
 			return
 		}
 
-		getISPInfo := r.FormValue("isp") == "true"
+		getISPInfo := r.FormValue("isp") == "true" && !conf.DisableIPInfo
 		distanceUnit := r.FormValue("distance")
 
 		ret.ProcessedString = clientIP
 
 		if getISPInfo {
-			ispInfo := getISPInfoByPriority(clientIP)
+			ispInfo, location := getIPInfoAndLocationByPriority(clientIP)
 			ret.RawISPInfo = ispInfo
+			ret.Location = location
 
 			removeRegexp := regexp.MustCompile(`AS\d+\s`)
 			isp := removeRegexp.ReplaceAllString(ispInfo.Organization, "")
@@ -317,6 +318,8 @@ func getIP(conf *config.Config) http.HandlerFunc {
 
 			if ispInfo.Country != "" {
 				isp += ", " + ispInfo.Country
+			} else if ispInfo.CountryName != "" {
+				isp += ", " + ispInfo.CountryName
 			}
 
 			if ispInfo.Location != "" {

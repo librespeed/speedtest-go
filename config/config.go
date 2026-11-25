@@ -12,10 +12,12 @@ type Config struct {
 	ProxyProtocolPort string `mapstructure:"proxyprotocol_port"`
 	// TrustedProxies lists IP addresses or CIDR prefixes of reverse proxies
 	// whose forwarding headers may be trusted. Empty means trust no proxy.
-	TrustedProxies []string `mapstructure:"trusted_proxies"`
-	ServerLat      float64  `mapstructure:"server_lat"`
-	ServerLng      float64  `mapstructure:"server_lng"`
-	IPInfoAPIKey   string   `mapstructure:"ipinfo_api_key"`
+	TrustedProxies           []string `mapstructure:"trusted_proxies"`
+	ServerLat                float64  `mapstructure:"server_lat"`
+	ServerLng                float64  `mapstructure:"server_lng"`
+	ServerLocationConfigured bool     `mapstructure:"-"`
+	IPInfoAPIKey             string   `mapstructure:"ipinfo_api_key"`
+	DisableIPInfo            bool     `mapstructure:"disable_ipinfo"`
 
 	StatsPassword       string `mapstructure:"statistics_password"`
 	RedactIP            bool   `mapstructure:"redact_ip_addresses"`
@@ -67,6 +69,12 @@ func init() {
 	viper.SetDefault("database_username", "postgres")
 	viper.SetDefault("enable_tls", false)
 	viper.SetDefault("enable_http2", false)
+	viper.SetDefault("disable_ipinfo", false)
+	_ = viper.BindEnv("disable_ipinfo", "DISABLE_IPINFO", "SPEEDTEST_DISABLE_IPINFO")
+	_ = viper.BindEnv("trusted_proxies", "TRUSTED_PROXIES", "SPEEDTEST_TRUSTED_PROXIES")
+	_ = viper.BindEnv("ipinfo_api_key", "IPINFO_APIKEY", "SPEEDTEST_IPINFO_APIKEY")
+	_ = viper.BindEnv("server_lat", "SERVER_LAT", "SPEEDTEST_SERVER_LAT")
+	_ = viper.BindEnv("server_lng", "SERVER_LNG", "SPEEDTEST_SERVER_LNG")
 
 	viper.SetConfigName("settings")
 	viper.AddConfigPath(".")
@@ -84,6 +92,9 @@ func Load(configPath string) Config {
 	if err := viper.Unmarshal(&conf); err != nil {
 		log.Fatalf("Error parsing config: %s", err)
 	}
+	serverLatConfigured := viper.InConfig("server_lat") || viper.IsSet("server_lat")
+	serverLngConfigured := viper.InConfig("server_lng") || viper.IsSet("server_lng")
+	conf.ServerLocationConfigured = serverLatConfigured && serverLngConfigured
 
 	loadedConfig = &conf
 

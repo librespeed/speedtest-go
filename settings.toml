@@ -16,6 +16,8 @@ server_lat=1
 server_lng=1
 # ipinfo.io API key, if applicable
 ipinfo_api_key=""
+# disable IP lookup and approximate IP-derived location metadata
+disable_ipinfo=false
 
 # assets directory path, defaults to `assets` in the same directory
 assets_path=""
