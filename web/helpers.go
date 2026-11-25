@@ -715,29 +715,57 @@ func mergeLocations(primary, fallback *results.Location) *results.Location {
 	if fallback == nil {
 		return primary
 	}
+	contributed := false
 	if primary.City == "" {
-		primary.City = fallback.City
+		if fallback.City != "" {
+			primary.City = fallback.City
+			contributed = true
+		}
 	}
 	if primary.Region == "" {
-		primary.Region = fallback.Region
+		if fallback.Region != "" {
+			primary.Region = fallback.Region
+			contributed = true
+		}
 	}
 	if primary.Country == "" {
-		primary.Country = fallback.Country
+		if fallback.Country != "" {
+			primary.Country = fallback.Country
+			contributed = true
+		}
 	}
 	if primary.CountryName == "" {
-		primary.CountryName = fallback.CountryName
+		if fallback.CountryName != "" {
+			primary.CountryName = fallback.CountryName
+			contributed = true
+		}
 	}
 	if primary.Postal == "" {
-		primary.Postal = fallback.Postal
+		if fallback.Postal != "" {
+			primary.Postal = fallback.Postal
+			contributed = true
+		}
 	}
 	if primary.Timezone == "" {
-		primary.Timezone = fallback.Timezone
+		if fallback.Timezone != "" {
+			primary.Timezone = fallback.Timezone
+			contributed = true
+		}
 	}
 	if primary.Latitude == nil {
-		primary.Latitude = fallback.Latitude
+		if fallback.Latitude != nil {
+			primary.Latitude = fallback.Latitude
+			contributed = true
+		}
 	}
 	if primary.Longitude == nil {
-		primary.Longitude = fallback.Longitude
+		if fallback.Longitude != nil {
+			primary.Longitude = fallback.Longitude
+			contributed = true
+		}
+	}
+	if contributed {
+		primary.Source = "ipinfo+geoip"
 	}
 	return primary
 }
@@ -751,6 +779,19 @@ func mergeGeoIPData(info *results.IPInfoResponse, geo *GeoIPData) {
 	}
 	if info.ASName == "" {
 		info.ASName = geo.ASName
+	}
+	if info.Location != "" {
+		if _, _, valid := parseValidatedCoordinates(info.Location); !valid {
+			info.Location = ""
+		}
+	}
+
+	apiCountry := normalizeCountryCode(info.Country)
+	geoCountry := normalizeCountryCode(geo.Country)
+	countryConflict := apiCountry != "" && geoCountry != "" && apiCountry != geoCountry
+	if countryConflict {
+		normalizeIPInfoResponse(info)
+		return
 	}
 	if info.Country == "" {
 		info.Country = geo.Country
@@ -776,6 +817,15 @@ func mergeGeoIPData(info *results.IPInfoResponse, geo *GeoIPData) {
 	normalizeIPInfoResponse(info)
 }
 
+func countryCodesConflict(info results.IPInfoResponse, geo *GeoIPData) bool {
+	if geo == nil {
+		return false
+	}
+	apiCountry := normalizeCountryCode(info.Country)
+	geoCountry := normalizeCountryCode(geo.Country)
+	return apiCountry != "" && geoCountry != "" && apiCountry != geoCountry
+}
+
 func getIPInfoAndLocationByPriority(addr string) (results.IPInfoResponse, *results.Location) {
 	conf := config.LoadedConfig()
 	if conf.DisableIPInfo {
@@ -789,6 +839,9 @@ func getIPInfoAndLocationByPriority(addr string) (results.IPInfoResponse, *resul
 
 	geo := geoIPLookup(addr)
 	geoLocation := locationFromGeoIPData(geo)
+	if countryCodesConflict(info, geo) {
+		geoLocation = nil
+	}
 	mergeGeoIPData(&info, geo)
 
 	if info.IP == "" {

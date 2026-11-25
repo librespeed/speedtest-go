@@ -244,3 +244,146 @@ func TestMalformedCoordinatesAreRejected(t *testing.T) {
 		t.Fatalf("out-of-range GeoIP coordinates should be omitted: %#v", geoLocation)
 	}
 }
+
+func TestCountryConflictSkipsGeoIPGeography(t *testing.T) {
+	config.Load("../settings.toml")
+
+	oldIPLookup := ipInfoLookup
+	oldGeoLookup := geoIPLookup
+	ipInfoLookup = func(string) results.IPInfoResponse {
+		return results.IPInfoResponse{
+			IP:       "128.94.2.134",
+			City:     "Washington",
+			Region:   "District of Columbia",
+			Country:  "US",
+			Location: "38.9072,-77.0369",
+		}
+	}
+	geoIPLookup = func(string) *GeoIPData {
+		latitude := 43.6532
+		longitude := -79.3832
+		return &GeoIPData{
+			ASName:      "Example ISP",
+			CountryName: "Canada",
+			City:        "Toronto",
+			Region:      "Ontario",
+			Country:     "CA",
+			Postal:      "M5V",
+			Timezone:    "America/Toronto",
+			Latitude:    &latitude,
+			Longitude:   &longitude,
+			Location:    "43.653200,-79.383200",
+		}
+	}
+	t.Cleanup(func() {
+		ipInfoLookup = oldIPLookup
+		geoIPLookup = oldGeoLookup
+		config.Load("../settings.toml")
+	})
+
+	info, location := getIPInfoAndLocationByPriority("128.94.2.134")
+	if info.Organization != "Example ISP" {
+		t.Fatalf("organization fallback should survive country conflict: %q", info.Organization)
+	}
+	if info.Country != "US" {
+		t.Fatalf("API country should remain authoritative: %q", info.Country)
+	}
+	if info.City != "Washington" || info.Region != "District of Columbia" {
+		t.Fatalf("conflicting GeoIP city/region should be skipped: %#v", info)
+	}
+	if info.Location != "38.9072,-77.0369" {
+		t.Fatalf("conflicting GeoIP coordinates should be skipped: %q", info.Location)
+	}
+	if location == nil || location.Source != "ipinfo" {
+		t.Fatalf("conflicting fallback should not add mixed provenance: %#v", location)
+	}
+	if location.City != "Washington" || location.Country != "US" {
+		t.Fatalf("unexpected conflict location: %#v", location)
+	}
+	if location.Latitude == nil || *location.Latitude != 38.9072 ||
+		location.Longitude == nil || *location.Longitude != -77.0369 {
+		t.Fatalf("API coordinates should remain: %#v", location)
+	}
+}
+
+func TestIPInfoGeoIPMergeReportsMixedSource(t *testing.T) {
+	config.Load("../settings.toml")
+
+	oldIPLookup := ipInfoLookup
+	oldGeoLookup := geoIPLookup
+	ipInfoLookup = func(string) results.IPInfoResponse {
+		return results.IPInfoResponse{
+			IP:      "128.94.2.134",
+			Country: "US",
+		}
+	}
+	geoIPLookup = func(string) *GeoIPData {
+		latitude := 36.6676
+		longitude := -78.3875
+		return &GeoIPData{
+			CountryName: "United States",
+			City:        "Boydton",
+			Region:      "Virginia",
+			Country:     "US",
+			Postal:      "23917",
+			Timezone:    "America/New_York",
+			Latitude:    &latitude,
+			Longitude:   &longitude,
+			Location:    "36.667600,-78.387500",
+		}
+	}
+	t.Cleanup(func() {
+		ipInfoLookup = oldIPLookup
+		geoIPLookup = oldGeoLookup
+		config.Load("../settings.toml")
+	})
+
+	info, location := getIPInfoAndLocationByPriority("128.94.2.134")
+	if info.Location != "36.667600,-78.387500" {
+		t.Fatalf("valid GeoIP legacy loc should fill missing API loc: %q", info.Location)
+	}
+	if location == nil || location.Source != "ipinfo+geoip" {
+		t.Fatalf("mixed source should be reported: %#v", location)
+	}
+	if location.City != "Boydton" || location.Region != "Virginia" {
+		t.Fatalf("GeoIP fields should enrich API metadata: %#v", location)
+	}
+}
+
+func TestInvalidAPILocIsReplacedByValidGeoIPLoc(t *testing.T) {
+	config.Load("../settings.toml")
+
+	oldIPLookup := ipInfoLookup
+	oldGeoLookup := geoIPLookup
+	ipInfoLookup = func(string) results.IPInfoResponse {
+		return results.IPInfoResponse{
+			IP:       "128.94.2.134",
+			Country:  "US",
+			Location: "91,-46.6339",
+		}
+	}
+	geoIPLookup = func(string) *GeoIPData {
+		latitude := 36.6676
+		longitude := -78.3875
+		return &GeoIPData{
+			Country:   "US",
+			City:      "Boydton",
+			Latitude:  &latitude,
+			Longitude: &longitude,
+			Location:  "36.667600,-78.387500",
+		}
+	}
+	t.Cleanup(func() {
+		ipInfoLookup = oldIPLookup
+		geoIPLookup = oldGeoLookup
+		config.Load("../settings.toml")
+	})
+
+	info, location := getIPInfoAndLocationByPriority("128.94.2.134")
+	if info.Location != "36.667600,-78.387500" {
+		t.Fatalf("invalid API loc should be replaced by valid GeoIP loc: %q", info.Location)
+	}
+	if location == nil || location.Latitude == nil || location.Longitude == nil {
+		t.Fatalf("valid GeoIP coordinates should survive invalid API loc: %#v", location)
+	}
+}

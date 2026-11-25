@@ -63,6 +63,11 @@ func ViewPage(w http.ResponseWriter, r *http.Request) {
 			log.Errorf("Error parsing ISP info: %s", err)
 		}
 	}
+	if conf.DisableIPInfo {
+		ispInfo.ProcessedString = ""
+		ispInfo.RawISPInfo = IPInfoResponse{}
+		ispInfo.Location = nil
+	}
 
 	// Parse the HTML template
 	t, err := template.New("results").Funcs(template.FuncMap{
