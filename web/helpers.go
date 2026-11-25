@@ -12,6 +12,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/oschwald/maxminddb-golang"
@@ -285,8 +286,9 @@ func normalizeIPInfoResponse(info *results.IPInfoResponse) {
 
 // GeoIP database holder (lazily opened on first use)
 var (
-	geoIPReader *maxminddb.Reader
-	geoIPOpened bool
+	geoIPReader     *maxminddb.Reader
+	geoIPReaderFile string
+	geoIPInitMu     sync.Mutex
 )
 
 type GeoIPData struct {
@@ -406,21 +408,35 @@ func getGeoIPData(ipStr string) *GeoIPData {
 		return nil
 	}
 
-	if !geoIPOpened {
-		geoIPOpened = true
-		if _, err := os.Stat(conf.GeoIPDatabaseFile); os.IsNotExist(err) {
-			log.Warnf("GeoIP database file not found: %s", conf.GeoIPDatabaseFile)
+	geoIPInitMu.Lock()
+	if geoIPReader != nil && geoIPReaderFile != conf.GeoIPDatabaseFile {
+		_ = geoIPReader.Close()
+		geoIPReader = nil
+		geoIPReaderFile = ""
+	}
+	if geoIPReader == nil {
+		if _, err := os.Stat(conf.GeoIPDatabaseFile); err != nil {
+			if os.IsNotExist(err) {
+				log.Warnf("GeoIP database file not found: %s", conf.GeoIPDatabaseFile)
+			} else {
+				log.Warnf("Cannot stat GeoIP database file: %s", err)
+			}
+			geoIPInitMu.Unlock()
 			return nil
 		}
 		reader, err := maxminddb.Open(conf.GeoIPDatabaseFile)
 		if err != nil {
 			log.Warnf("Failed to open GeoIP database: %s", err)
+			geoIPInitMu.Unlock()
 			return nil
 		}
 		geoIPReader = reader
+		geoIPReaderFile = conf.GeoIPDatabaseFile
 	}
+	reader := geoIPReader
+	geoIPInitMu.Unlock()
 
-	if geoIPReader == nil {
+	if reader == nil {
 		return nil
 	}
 
@@ -431,7 +447,7 @@ func getGeoIPData(ipStr string) *GeoIPData {
 
 	// Try ipinfo.io offline database format first
 	var ipinfoResult map[string]interface{}
-	if err := geoIPReader.Lookup(ip, &ipinfoResult); err != nil {
+	if err := reader.Lookup(ip, &ipinfoResult); err != nil {
 		log.Warnf("GeoIP lookup failed: %s", err)
 		return nil
 	}
@@ -453,6 +469,8 @@ func normalizeGeoIPResult(ipinfoResult map[string]interface{}) *GeoIPData {
 	// ipinfo.io offline database format.
 	result.ASName = firstNonEmpty(
 		mapStringValue(ipinfoResult, "as_name"),
+		mapStringValue(ipinfoResult, "autonomous_system_organization"),
+		mapStringValue(ipinfoResult, "as_organization"),
 		mapStringValue(ipinfoResult, "organization"),
 		mapStringValue(ipinfoResult, "org"),
 	)

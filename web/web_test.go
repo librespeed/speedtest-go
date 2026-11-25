@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/librespeed/speedtest-go/config"
@@ -87,6 +88,52 @@ func TestGetIPResponseIncludesLegacyAndStructuredLocation(t *testing.T) {
 	}
 	if legacyResult.ProcessedString != response.ProcessedString {
 		t.Fatal("processedString compatibility changed")
+	}
+}
+
+func TestGetIPMalformedLocationHasNoEmptyDistanceSuffix(t *testing.T) {
+	config.Load("../settings.toml")
+
+	oldIPLookup := ipInfoLookup
+	oldGeoLookup := geoIPLookup
+	ipInfoLookup = func(string) results.IPInfoResponse {
+		return results.IPInfoResponse{
+			IP:           "128.94.2.134",
+			City:         "Boydton",
+			Region:       "Virginia",
+			Country:      "US",
+			Location:     "91,-78.3875",
+			Organization: "AS8075 Microsoft Corporation",
+		}
+	}
+	geoIPLookup = func(string) *GeoIPData {
+		return nil
+	}
+	t.Cleanup(func() {
+		ipInfoLookup = oldIPLookup
+		geoIPLookup = oldGeoLookup
+		config.Load("../settings.toml")
+	})
+
+	request := httptest.NewRequest(http.MethodGet, "/getIP?isp=true&distance=km", nil)
+	request.RemoteAddr = "128.94.2.134:12345"
+	recorder := httptest.NewRecorder()
+	getIP(recorder, request)
+
+	var response results.Result
+	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
+		t.Fatalf("decode getIP response: %v", err)
+	}
+	if strings.Contains(response.ProcessedString, "()") {
+		t.Fatalf("malformed location created an empty distance suffix: %q", response.ProcessedString)
+	}
+	if !strings.HasSuffix(response.ProcessedString, "Microsoft Corporation, US") {
+		t.Fatalf("unexpected malformed-location processedString: %q", response.ProcessedString)
+	}
+	if response.Location != nil {
+		if response.Location.Latitude != nil || response.Location.Longitude != nil {
+			t.Fatalf("malformed coordinates should not be emitted: %#v", response.Location)
+		}
 	}
 }
 

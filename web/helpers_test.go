@@ -106,9 +106,7 @@ func TestGetIPInfoAPIResponseAndLocation(t *testing.T) {
 
 func TestNormalizeGeoIPMaxMindCityFormat(t *testing.T) {
 	geo := normalizeGeoIPResult(map[string]interface{}{
-		"autonomous_system": map[string]interface{}{
-			"organization": "Microsoft Corporation",
-		},
+		"autonomous_system_organization": "Microsoft Corporation",
 		"country": map[string]interface{}{
 			"iso_code": "US",
 			"names": map[string]interface{}{
