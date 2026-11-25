@@ -45,6 +45,13 @@ func extractISPName(processedString string) string {
 	return isp
 }
 
+func exportJSONISPName(processedString string, disableIPInfo bool) string {
+	if disableIPInfo {
+		return ""
+	}
+	return extractISPName(processedString)
+}
+
 // JSONResponse is the structure returned by the JSON results endpoint
 type JSONResponse struct {
 	Timestamp string `json:"timestamp"`
@@ -91,8 +98,10 @@ func JSONResult(w http.ResponseWriter, r *http.Request) {
 
 	// Extract ISP name from ISP info JSON
 	var result Result
-	if err := json.Unmarshal([]byte(record.ISPInfo), &result); err == nil {
-		resp.ISPInfo = extractISPName(result.ProcessedString)
+	if !conf.DisableIPInfo {
+		if err := json.Unmarshal([]byte(record.ISPInfo), &result); err == nil {
+			resp.ISPInfo = exportJSONISPName(result.ProcessedString, false)
+		}
 	}
 
 	w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0, s-maxage=0")

@@ -387,3 +387,19 @@ func TestInvalidAPILocIsReplacedByValidGeoIPLoc(t *testing.T) {
 		t.Fatalf("valid GeoIP coordinates should survive invalid API loc: %#v", location)
 	}
 }
+
+func TestCalculateDistanceWithUnknownServerLocation(t *testing.T) {
+	oldCoord := serverCoord
+	oldKnown := serverLocationKnown
+	serverCoord.Lat = 0
+	serverCoord.Lon = 0
+	serverLocationKnown = false
+	t.Cleanup(func() {
+		serverCoord = oldCoord
+		serverLocationKnown = oldKnown
+	})
+
+	if distance := calculateDistance("36.6676,-78.3875", "km"); distance != "" {
+		t.Fatalf("unknown server location should suppress distance: %q", distance)
+	}
+}

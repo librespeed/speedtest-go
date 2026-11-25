@@ -126,6 +126,52 @@ func TestGetIPProcessedStringFallsBackToCountryName(t *testing.T) {
 	}
 }
 
+func TestGetIPUnknownServerLocationHasNoDistanceSuffix(t *testing.T) {
+	config.Load("../settings.toml")
+
+	oldIPLookup := ipInfoLookup
+	oldGeoLookup := geoIPLookup
+	oldCoord := serverCoord
+	oldKnown := serverLocationKnown
+	ipInfoLookup = func(string) results.IPInfoResponse {
+		return results.IPInfoResponse{
+			IP:           "128.94.2.134",
+			Country:      "US",
+			Location:     "36.6676,-78.3875",
+			Organization: "AS8075 Microsoft Corporation",
+		}
+	}
+	geoIPLookup = func(string) *GeoIPData {
+		return nil
+	}
+	serverCoord.Lat = 0
+	serverCoord.Lon = 0
+	serverLocationKnown = false
+	t.Cleanup(func() {
+		ipInfoLookup = oldIPLookup
+		geoIPLookup = oldGeoLookup
+		serverCoord = oldCoord
+		serverLocationKnown = oldKnown
+		config.Load("../settings.toml")
+	})
+
+	request := httptest.NewRequest(http.MethodGet, "/getIP?isp=true&distance=km", nil)
+	request.RemoteAddr = "128.94.2.134:12345"
+	recorder := httptest.NewRecorder()
+	getIP(recorder, request)
+
+	var response results.Result
+	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
+		t.Fatalf("decode getIP response: %v", err)
+	}
+	if strings.Contains(response.ProcessedString, " (") {
+		t.Fatalf("unknown server location produced a distance suffix: %q", response.ProcessedString)
+	}
+	if !strings.HasSuffix(response.ProcessedString, "Microsoft Corporation, US") {
+		t.Fatalf("unexpected unknown-server processedString: %q", response.ProcessedString)
+	}
+}
+
 func TestGetIPMalformedLocationHasNoEmptyDistanceSuffix(t *testing.T) {
 	config.Load("../settings.toml")
 

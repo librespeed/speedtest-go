@@ -228,3 +228,21 @@ func TestLegacyISPPayloadCompatibility(t *testing.T) {
 		t.Fatal("nil location should be omitted")
 	}
 }
+
+func TestSavedResultExportsHonorDisableIPInfo(t *testing.T) {
+	processed := "128.94.2.134 - Microsoft Corporation, United States (15 mi)"
+
+	if got := exportJSONISPName(processed, true); got != "" {
+		t.Fatalf("JSON export leaked ISP metadata while disabled: %q", got)
+	}
+	if got := exportPNGISP(processed, true); got != "" {
+		t.Fatalf("PNG export leaked ISP metadata while disabled: %q", got)
+	}
+
+	if got := exportJSONISPName(processed, false); got == "" {
+		t.Fatal("JSON export lost ISP metadata when IP info is enabled")
+	}
+	if got := exportPNGISP(processed, false); got == "" {
+		t.Fatal("PNG export lost ISP metadata when IP info is enabled")
+	}
+}

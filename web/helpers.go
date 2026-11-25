@@ -26,7 +26,8 @@ import (
 )
 
 var (
-	serverCoord haversine.Coord
+	serverCoord         haversine.Coord
+	serverLocationKnown bool
 
 	ipInfoHTTPClient = &http.Client{Timeout: 5 * time.Second}
 	ipInfoBaseURL    = "https://ipinfo.io"
@@ -97,14 +98,21 @@ func getIPInfo(addr string) results.IPInfoResponse {
 }
 
 func SetServerLocation(conf *config.Config) {
+	serverLocationKnown = false
+	serverCoord = haversine.Coord{}
 	if conf.DisableIPInfo {
 		log.Info("IP-derived location metadata is disabled")
 		return
 	}
 	if conf.ServerLat != 0 || conf.ServerLng != 0 {
-		log.Infof("Configured server coordinates: %.6f, %.6f", conf.ServerLat, conf.ServerLng)
-		serverCoord.Lat = conf.ServerLat
-		serverCoord.Lon = conf.ServerLng
+		if validCoordinates(conf.ServerLat, conf.ServerLng) {
+			log.Infof("Configured server coordinates: %.6f, %.6f", conf.ServerLat, conf.ServerLng)
+			serverCoord.Lat = conf.ServerLat
+			serverCoord.Lon = conf.ServerLng
+			serverLocationKnown = true
+		} else {
+			log.Errorf("Invalid configured server coordinates: latitude=%v longitude=%v", conf.ServerLat, conf.ServerLng)
+		}
 		return
 	}
 
@@ -120,6 +128,7 @@ func SetServerLocation(conf *config.Config) {
 			log.Errorf("Cannot get server coordinates: %s", err)
 			return
 		}
+		serverLocationKnown = true
 	}
 
 	log.Infof("Fetched server coordinates: %.6f, %.6f", serverCoord.Lat, serverCoord.Lon)
@@ -160,6 +169,9 @@ func parseLocationString(location string) (haversine.Coord, error) {
 }
 
 func calculateDistance(clientLocation string, unit string) string {
+	if !serverLocationKnown {
+		return ""
+	}
 	clientCoord, err := parseLocationString(clientLocation)
 	if err != nil {
 		log.Errorf("Error parsing client coordinates: %s", err)
