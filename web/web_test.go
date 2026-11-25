@@ -91,6 +91,41 @@ func TestGetIPResponseIncludesLegacyAndStructuredLocation(t *testing.T) {
 	}
 }
 
+func TestGetIPProcessedStringFallsBackToCountryName(t *testing.T) {
+	config.Load("../settings.toml")
+
+	oldIPLookup := ipInfoLookup
+	oldGeoLookup := geoIPLookup
+	ipInfoLookup = func(string) results.IPInfoResponse {
+		return results.IPInfoResponse{
+			IP:           "128.94.2.134",
+			CountryName:  "United States",
+			Organization: "AS8075 Microsoft Corporation",
+		}
+	}
+	geoIPLookup = func(string) *GeoIPData {
+		return nil
+	}
+	t.Cleanup(func() {
+		ipInfoLookup = oldIPLookup
+		geoIPLookup = oldGeoLookup
+		config.Load("../settings.toml")
+	})
+
+	request := httptest.NewRequest(http.MethodGet, "/getIP?isp=true", nil)
+	request.RemoteAddr = "128.94.2.134:12345"
+	recorder := httptest.NewRecorder()
+	getIP(recorder, request)
+
+	var response results.Result
+	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
+		t.Fatalf("decode getIP response: %v", err)
+	}
+	if !strings.HasSuffix(response.ProcessedString, "Microsoft Corporation, United States") {
+		t.Fatalf("processedString did not fall back to CountryName: %q", response.ProcessedString)
+	}
+}
+
 func TestGetIPMalformedLocationHasNoEmptyDistanceSuffix(t *testing.T) {
 	config.Load("../settings.toml")
 
