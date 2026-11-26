@@ -839,7 +839,7 @@ func mergeLocations(primary, fallback *results.Location) *results.Location {
 			contributed = true
 		}
 	} else if !cityConflict {
-		if primary.Region == "" && fallback.Region != "" {
+		if primary.Region == "" && fallback.Region != "" && !primaryHasCoordinates {
 			primary.Region = fallback.Region
 			contributed = true
 		}
