@@ -791,6 +791,8 @@ func syncLegacyLocation(info *results.IPInfoResponse, location *results.Location
 		if location != nil {
 			info.City = strings.TrimSpace(location.City)
 			info.Region = strings.TrimSpace(location.Region)
+			info.Postal = strings.TrimSpace(location.Postal)
+			info.Timezone = strings.TrimSpace(location.Timezone)
 			if strings.TrimSpace(location.CountryName) != "" {
 				info.CountryName = strings.TrimSpace(location.CountryName)
 			}
@@ -802,6 +804,8 @@ func syncLegacyLocation(info *results.IPInfoResponse, location *results.Location
 	}
 	info.City = strings.TrimSpace(location.City)
 	info.Region = strings.TrimSpace(location.Region)
+	info.Postal = strings.TrimSpace(location.Postal)
+	info.Timezone = strings.TrimSpace(location.Timezone)
 	country := strings.ToUpper(strings.TrimSpace(location.Country))
 	if country != "" && len(country) == 2 {
 		info.Country = country
@@ -816,11 +820,67 @@ func syncLegacyLocation(info *results.IPInfoResponse, location *results.Location
 		*location.Longitude)
 }
 
+func countryIdentity(code, name string) string {
+	code = normalizeCountryCode(code)
+	if code != "" {
+		if countryName := countryNameFromCode(code); countryName != "" {
+			return strings.ToLower(strings.TrimSpace(countryName))
+		}
+	}
+	return strings.ToLower(strings.TrimSpace(name))
+}
+
+func locationCountryConflict(primary, fallback *results.Location) bool {
+	if primary == nil || fallback == nil {
+		return false
+	}
+	primaryCode := normalizeCountryCode(primary.Country)
+	fallbackCode := normalizeCountryCode(fallback.Country)
+	if primaryCode != "" && fallbackCode != "" && primaryCode != fallbackCode {
+		return true
+	}
+	primaryIdentity := countryIdentity(primary.Country, primary.CountryName)
+	fallbackIdentity := countryIdentity(fallback.Country, fallback.CountryName)
+	return primaryIdentity != "" &&
+		fallbackIdentity != "" &&
+		primaryIdentity != fallbackIdentity
+}
+
+func locationPlaceConflict(primary, fallback *results.Location) bool {
+	if primary == nil || fallback == nil {
+		return false
+	}
+	cityConflict := primary.City != "" &&
+		fallback.City != "" &&
+		!strings.EqualFold(strings.TrimSpace(primary.City), strings.TrimSpace(fallback.City))
+	regionConflict := primary.Region != "" &&
+		fallback.Region != "" &&
+		!strings.EqualFold(strings.TrimSpace(primary.Region), strings.TrimSpace(fallback.Region))
+	if cityConflict || regionConflict {
+		return true
+	}
+	primaryHasCoordinates := primary.Latitude != nil && primary.Longitude != nil
+	if primaryHasCoordinates &&
+		strings.TrimSpace(primary.City) == "" &&
+		strings.TrimSpace(primary.Region) == "" &&
+		(strings.TrimSpace(fallback.City) != "" ||
+			strings.TrimSpace(fallback.Region) != "" ||
+			strings.TrimSpace(fallback.Postal) != "" ||
+			strings.TrimSpace(fallback.Timezone) != "") {
+		return true
+	}
+	return false
+}
+
 func mergeLocations(primary, fallback *results.Location) *results.Location {
 	if primary == nil {
 		return fallback
 	}
 	if fallback == nil {
+		return primary
+	}
+	if locationCountryConflict(primary, fallback) ||
+		locationPlaceConflict(primary, fallback) {
 		return primary
 	}
 	contributed := false
@@ -851,6 +911,10 @@ func mergeLocations(primary, fallback *results.Location) *results.Location {
 			primary.Region = fallback.Region
 			contributed = true
 		}
+	}
+	if primary.Region == "" && fallback.Region != "" && !coordinatesConflict && !primaryHasCoordinates {
+		primary.Region = fallback.Region
+		contributed = true
 	}
 	if primary.Country == "" {
 		if fallback.Country != "" {
@@ -908,6 +972,13 @@ func geographicFieldsConflict(info *results.IPInfoResponse, geo *GeoIPData) bool
 	if apiCountry != "" && geoCountry != "" && apiCountry != geoCountry {
 		return true
 	}
+	apiCountryIdentity := countryIdentity(apiCountry, info.CountryName)
+	geoCountryIdentity := countryIdentity(geoCountry, geo.CountryName)
+	if apiCountryIdentity != "" &&
+		geoCountryIdentity != "" &&
+		apiCountryIdentity != geoCountryIdentity {
+		return true
+	}
 	apiCity := strings.TrimSpace(info.City)
 	geoCity := strings.TrimSpace(geo.City)
 	if apiCity != "" && geoCity != "" && !strings.EqualFold(apiCity, geoCity) {
@@ -916,6 +987,21 @@ func geographicFieldsConflict(info *results.IPInfoResponse, geo *GeoIPData) bool
 	apiRegion := strings.TrimSpace(info.Region)
 	geoRegion := strings.TrimSpace(geo.Region)
 	if apiRegion != "" && geoRegion != "" && !strings.EqualFold(apiRegion, geoRegion) {
+		return true
+	}
+	geoHasCoordinates := geo.Latitude != nil && geo.Longitude != nil
+	if geo.Location != "" {
+		if _, _, valid := parseValidatedCoordinates(geo.Location); valid {
+			geoHasCoordinates = true
+		}
+	}
+	if geoHasCoordinates &&
+		geoCity == "" &&
+		geoRegion == "" &&
+		(apiCity != "" ||
+			apiRegion != "" ||
+			strings.TrimSpace(info.Postal) != "" ||
+			strings.TrimSpace(info.Timezone) != "") {
 		return true
 	}
 	return false

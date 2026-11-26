@@ -402,6 +402,99 @@ func TestCountryConflictKeepsGeoIPPrimary(t *testing.T) {
 	}
 }
 
+func TestCoordinateOnlyGeoIPRejectsAPIPlacePostalTimezone(t *testing.T) {
+	config.Load("../settings.toml")
+
+	oldIPLookup := ipInfoLookup
+	oldGeoLookup := geoIPLookup
+	ipInfoLookup = func(string) results.IPInfoResponse {
+		return results.IPInfoResponse{
+			IP:       "128.94.2.134",
+			City:     "New York",
+			Region:   "New York",
+			Country:  "US",
+			Postal:   "10001",
+			Timezone: "America/New_York",
+			Location: "40.7128,-74.0060",
+		}
+	}
+	geoIPLookup = func(string) *GeoIPData {
+		latitude := 39.7684
+		longitude := -86.158
+		return &GeoIPData{
+			Country:   "US",
+			Latitude:  &latitude,
+			Longitude: &longitude,
+			Location:  "39.768400,-86.158000",
+		}
+	}
+	t.Cleanup(func() {
+		ipInfoLookup = oldIPLookup
+		geoIPLookup = oldGeoLookup
+		config.Load("../settings.toml")
+	})
+
+	info, location := getIPInfoAndLocationByPriority("128.94.2.134")
+	if info.City != "" || info.Region != "" || info.Postal != "" || info.Timezone != "" {
+		t.Fatalf("API place metadata should not cross coordinate-only GeoIP: %#v", info)
+	}
+	if info.Location != "39.768400,-86.158000" {
+		t.Fatalf("GeoIP coordinates should remain: %q", info.Location)
+	}
+	if location == nil ||
+		location.City != "" || location.Region != "" ||
+		location.Postal != "" || location.Timezone != "" {
+		t.Fatalf("structured location should not receive rejected place metadata: %#v", location)
+	}
+}
+
+func TestCountryNameConflictKeepsCountryNameWithoutCode(t *testing.T) {
+	config.Load("../settings.toml")
+
+	oldIPLookup := ipInfoLookup
+	oldGeoLookup := geoIPLookup
+	ipInfoLookup = func(string) results.IPInfoResponse {
+		return results.IPInfoResponse{
+			IP:       "128.94.2.134",
+			City:     "Washington",
+			Region:   "District of Columbia",
+			Country:  "US",
+			Location: "38.9072,-77.0369",
+		}
+	}
+	geoIPLookup = func(string) *GeoIPData {
+		latitude := 43.6532
+		longitude := -79.3832
+		return &GeoIPData{
+			CountryName: "Canada",
+			City:        "Toronto",
+			Region:      "Ontario",
+			Latitude:    &latitude,
+			Longitude:   &longitude,
+			Location:    "43.653200,-79.383200",
+		}
+	}
+	t.Cleanup(func() {
+		ipInfoLookup = oldIPLookup
+		geoIPLookup = oldGeoLookup
+		config.Load("../settings.toml")
+	})
+
+	info, location := getIPInfoAndLocationByPriority("128.94.2.134")
+	if info.Country != "" || info.CountryName != "Canada" {
+		t.Fatalf("country-name-only GeoIP identity should remain: %#v", info)
+	}
+	if info.City != "Toronto" || info.Region != "Ontario" ||
+		info.Location != "43.653200,-79.383200" {
+		t.Fatalf("GeoIP place should remain primary: %#v", info)
+	}
+	if location == nil || location.Country != "" ||
+		location.CountryName != "Canada" ||
+		location.City != "Toronto" || location.Region != "Ontario" {
+		t.Fatalf("structured location should preserve country-name conflict: %#v", location)
+	}
+}
+
 func TestGeoIPPrimaryKeepsGeoIPSource(t *testing.T) {
 	config.Load("../settings.toml")
 
@@ -697,6 +790,82 @@ func TestMergeLocationsAdoptsFallbackWithoutPrimaryGeography(t *testing.T) {
 	}
 }
 
+func TestMergeLocationsCopiesCompatibleRegionWithoutCity(t *testing.T) {
+	primary := &results.Location{
+		Country:     "US",
+		CountryName: "United States",
+		Source:      "geoip",
+	}
+	fallback := &results.Location{
+		Region:      "Indiana",
+		Country:     "US",
+		CountryName: "United States",
+		Source:      "ipinfo",
+	}
+	merged := mergeLocations(primary, fallback)
+	if merged.Region != "Indiana" {
+		t.Fatalf("compatible region should merge without a city: %#v", merged)
+	}
+	if merged.City != "" {
+		t.Fatalf("region-only merge should not infer a city: %#v", merged)
+	}
+}
+
+func TestMergeLocationsRejectsPostalTimezoneAcrossCoordinatePlaceConflict(t *testing.T) {
+	lat := 39.7684
+	lon := -86.158
+	primary := &results.Location{
+		Country:     "US",
+		CountryName: "United States",
+		Latitude:    &lat,
+		Longitude:   &lon,
+		Source:      "geoip",
+	}
+	fallback := &results.Location{
+		City:        "New York",
+		Region:      "New York",
+		Country:     "US",
+		CountryName: "United States",
+		Postal:      "10001",
+		Timezone:    "America/New_York",
+		Latitude:    &lat,
+		Longitude:   &lon,
+		Source:      "ipinfo",
+	}
+	merged := mergeLocations(primary, fallback)
+	if merged.City != "" || merged.Region != "" ||
+		merged.Postal != "" || merged.Timezone != "" {
+		t.Fatalf("postal/timezone/place should not cross coordinate-only GeoIP: %#v", merged)
+	}
+}
+
+func TestMergeLocationsRejectsCountryNameConflictWithoutCode(t *testing.T) {
+	primaryLat := 43.6532
+	primaryLon := -79.3832
+	primary := &results.Location{
+		CountryName: "Canada",
+		Latitude:    &primaryLat,
+		Longitude:   &primaryLon,
+		Source:      "geoip",
+	}
+	fallbackLat := 38.9072
+	fallbackLon := -77.0369
+	fallback := &results.Location{
+		City:        "Washington",
+		Region:      "District of Columbia",
+		Country:     "US",
+		CountryName: "United States",
+		Latitude:    &fallbackLat,
+		Longitude:   &fallbackLon,
+		Source:      "ipinfo",
+	}
+	merged := mergeLocations(primary, fallback)
+	if merged.Country != "" || merged.CountryName != "Canada" ||
+		merged.City != "" || merged.Region != "" {
+		t.Fatalf("conflicting country name should keep GeoIP identity: %#v", merged)
+	}
+}
+
 func TestSyncLegacyLocationUsesFinalMergedPlace(t *testing.T) {
 	lat := 38.9072
 	lon := -77.0369
@@ -735,6 +904,26 @@ func TestSyncLegacyLocationPreservesTextWhenCoordinatesMissing(t *testing.T) {
 		info.Country != "US" || info.CountryName != "United States" ||
 		info.Location != "" {
 		t.Fatalf("legacy text should survive missing coordinates: %#v", info)
+	}
+}
+
+func TestSyncLegacyLocationClearsRejectedPostalTimezone(t *testing.T) {
+	lat := 39.7684
+	lon := -86.158
+	info := results.IPInfoResponse{
+		Postal:   "10001",
+		Timezone: "America/New_York",
+	}
+	location := &results.Location{
+		Country:     "US",
+		CountryName: "United States",
+		Latitude:    &lat,
+		Longitude:   &lon,
+		Source:      "geoip",
+	}
+	syncLegacyLocation(&info, location)
+	if info.Postal != "" || info.Timezone != "" {
+		t.Fatalf("rejected postal/timezone should be cleared from legacy fields: %#v", info)
 	}
 }
 
