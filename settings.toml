@@ -6,6 +6,11 @@ listen_port=8989
 # url_base="/librespeed"
 # proxy protocol port, use 0 to disable
 proxyprotocol_port=0
+# CIDRs/IPs of reverse proxies whose forwarding headers are trusted.
+# Empty (the default) ignores all forwarding headers to prevent spoofing.
+# Example for nginx on localhost: ["127.0.0.1/32", "::1/128"]
+# Example for Cloudflare: use the ranges listed at https://www.cloudflare.com/ips/
+# trusted_proxies=[]
 # Server location
 server_lat=1
 server_lng=1

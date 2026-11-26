@@ -9,7 +9,6 @@ import (
 	"image/draw"
 	"image/png"
 	"math/rand"
-	"net"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -20,6 +19,7 @@ import (
 	"github.com/librespeed/speedtest-go/config"
 	"github.com/librespeed/speedtest-go/database"
 	"github.com/librespeed/speedtest-go/database/schema"
+	"github.com/librespeed/speedtest-go/internal/clientip"
 
 	"github.com/golang/freetype"
 	"github.com/golang/freetype/truetype"
@@ -285,7 +285,7 @@ func Record(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ipAddr, _, _ := net.SplitHostPort(r.RemoteAddr)
+	ipAddr := clientip.ClientIP(r, conf.TrustedProxies)
 	userAgent := r.UserAgent()
 	language := r.Header.Get("Accept-Language")
 

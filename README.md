@@ -32,7 +32,7 @@ Works with mobile versions too.
 
 ### IP Detection
 
-* Client IP detection with proxy header chain support (X-Forwarded-For, X-Real-IP, Client-IP, CF-Connecting-IPv6)
+* Client IP detection from forwarding headers (X-Forwarded-For, X-Real-IP, Client-IP, CF-Connecting-IPv6) only when the peer is a configured trusted proxy
 * ISP and location detection via ipinfo.io API with offline GeoIP database fallback (MaxMind .mmdb)
 * Private/special IP detection (including ULA IPv6 and CGNAT)
 * Distance calculation with human-friendly rounding
@@ -144,6 +144,8 @@ You need Go 1.21+ to compile the binary.
     listen_port=8989
     # proxy protocol port, use 0 to disable
     proxyprotocol_port=0
+    # reverse proxies whose forwarding headers may be trusted
+    # trusted_proxies=["127.0.0.1/32", "::1/128"]
     # Server location, use zeroes to fetch from API automatically
     server_lat=0
     server_lng=0
@@ -187,6 +189,16 @@ You need Go 1.21+ to compile the binary.
     # tls_cert_file="cert.pem"
     # tls_key_file="privkey.pem"
     ```
+
+### Behind a reverse proxy
+
+Forwarding headers (`X-Forwarded-For`, `X-Real-IP`, `Client-IP`, and `CF-Connecting-IPv6`) are honored only when the TCP peer address is listed in `trusted_proxies`. This is a behavior change from earlier releases, where any peer could set these headers. Set the option to the address or CIDR range of your proxy, for example `trusted_proxies=["127.0.0.1/32", "::1/128"]` for a proxy on the same host.
+
+If the server is firewalled to accept connections only from the proxy, adding that proxy address to `trusted_proxies` restores the previous header handling for proxied requests. Trusting every peer with `trusted_proxies=["0.0.0.0/0", "::/0"]` recreates the old trust model, but use it only in that firewalled setup; `X-Forwarded-For` is still resolved from right to left. Leaving `trusted_proxies` empty ignores all forwarding headers.
+
+A trusted proxy must overwrite these headers on every request rather than forwarding a client-supplied value. For example, nginx should set `proxy_set_header X-Real-IP $remote_addr;` and `proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;`. If a proxy passes an inbound `X-Real-IP` or `Client-IP` through unchanged, a client can still choose its own address.
+
+Proxy Protocol support is unaffected: it rewrites the TCP peer address before the HTTP request is parsed.
 
 ## Differences between Go and PHP implementation and caveats
 

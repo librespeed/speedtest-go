@@ -23,6 +23,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/librespeed/speedtest-go/config"
+	"github.com/librespeed/speedtest-go/internal/clientip"
 	"github.com/librespeed/speedtest-go/results"
 )
 
@@ -40,8 +41,11 @@ var (
 )
 
 func ListenAndServe(conf *config.Config) error {
+	if _, err := clientip.ParseTrustedProxies(conf.TrustedProxies); err != nil {
+		log.Fatalf("Invalid trusted_proxies configuration: %s", err)
+	}
+
 	r := chi.NewRouter()
-	r.Use(middleware.RealIP)
 	r.Use(middleware.GetHead)
 
 	cs := cors.New(cors.Options{
@@ -71,8 +75,8 @@ func ListenAndServe(conf *config.Config) error {
 	r.HandleFunc(conf.BaseURL+"/backend/empty", empty)
 	r.Get(conf.BaseURL+"/garbage", garbage)
 	r.Get(conf.BaseURL+"/backend/garbage", garbage)
-	r.Get(conf.BaseURL+"/getIP", getIP)
-	r.Get(conf.BaseURL+"/backend/getIP", getIP)
+	r.Get(conf.BaseURL+"/getIP", getIP(conf))
+	r.Get(conf.BaseURL+"/backend/getIP", getIP(conf))
 	r.Get(conf.BaseURL+"/results/view", results.ViewPage)
 	r.Get(conf.BaseURL+"/results", results.DrawPNG)
 	r.Get(conf.BaseURL+"/results/", results.DrawPNG)
@@ -90,8 +94,8 @@ func ListenAndServe(conf *config.Config) error {
 	r.HandleFunc(conf.BaseURL+"/backend/empty.php", empty)
 	r.Get(conf.BaseURL+"/garbage.php", garbage)
 	r.Get(conf.BaseURL+"/backend/garbage.php", garbage)
-	r.Get(conf.BaseURL+"/getIP.php", getIP)
-	r.Get(conf.BaseURL+"/backend/getIP.php", getIP)
+	r.Get(conf.BaseURL+"/getIP.php", getIP(conf))
+	r.Get(conf.BaseURL+"/backend/getIP.php", getIP(conf))
 	r.Post(conf.BaseURL+"/results/telemetry.php", results.Record)
 	r.Post(conf.BaseURL+"/backend/results/telemetry.php", results.Record)
 	r.HandleFunc(conf.BaseURL+"/stats.php", results.Stats)
@@ -271,55 +275,57 @@ func isClientGone(err error) bool {
 		strings.Contains(msg, "context canceled")
 }
 
-func getIP(w http.ResponseWriter, r *http.Request) {
-	var ret results.Result
+func getIP(conf *config.Config) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var ret results.Result
 
-	clientIP := getClientIP(r)
+		clientIP := clientip.ClientIP(r, conf.TrustedProxies)
 
-	// Add anti-cache headers matching PHP behavior
-	w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0, s-maxage=0")
-	w.Header().Add("Cache-Control", "post-check=0, pre-check=0")
-	w.Header().Set("Pragma", "no-cache")
+		// Add anti-cache headers matching PHP behavior
+		w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0, s-maxage=0")
+		w.Header().Add("Cache-Control", "post-check=0, pre-check=0")
+		w.Header().Set("Pragma", "no-cache")
 
-	sendPHPCORSHeaders(w, r)
+		sendPHPCORSHeaders(w, r)
 
-	if desc := classifyPrivateIP(clientIP); desc != "" {
-		ret.ProcessedString = clientIP + " - " + desc
-		b, _ := json.Marshal(&ret)
-		if _, err := w.Write(b); err != nil {
-			if !isClientGone(err) {
-				log.Errorf("Error writing to client: %s", err)
+		if desc := classifyPrivateIP(clientIP); desc != "" {
+			ret.ProcessedString = clientIP + " - " + desc
+			b, _ := json.Marshal(&ret)
+			if _, err := w.Write(b); err != nil {
+				if !isClientGone(err) {
+					log.Errorf("Error writing to client: %s", err)
+				}
 			}
+			return
 		}
-		return
+
+		getISPInfo := r.FormValue("isp") == "true"
+		distanceUnit := r.FormValue("distance")
+
+		ret.ProcessedString = clientIP
+
+		if getISPInfo {
+			ispInfo := getISPInfoByPriority(clientIP)
+			ret.RawISPInfo = ispInfo
+
+			removeRegexp := regexp.MustCompile(`AS\d+\s`)
+			isp := removeRegexp.ReplaceAllString(ispInfo.Organization, "")
+
+			if isp == "" {
+				isp = "Unknown ISP"
+			}
+
+			if ispInfo.Country != "" {
+				isp += ", " + ispInfo.Country
+			}
+
+			if ispInfo.Location != "" {
+				isp += " (" + calculateDistance(ispInfo.Location, distanceUnit) + ")"
+			}
+
+			ret.ProcessedString += " - " + isp
+		}
+
+		render.JSON(w, r, ret)
 	}
-
-	getISPInfo := r.FormValue("isp") == "true"
-	distanceUnit := r.FormValue("distance")
-
-	ret.ProcessedString = clientIP
-
-	if getISPInfo {
-		ispInfo := getISPInfoByPriority(clientIP)
-		ret.RawISPInfo = ispInfo
-
-		removeRegexp := regexp.MustCompile(`AS\d+\s`)
-		isp := removeRegexp.ReplaceAllString(ispInfo.Organization, "")
-
-		if isp == "" {
-			isp = "Unknown ISP"
-		}
-
-		if ispInfo.Country != "" {
-			isp += ", " + ispInfo.Country
-		}
-
-		if ispInfo.Location != "" {
-			isp += " (" + calculateDistance(ispInfo.Location, distanceUnit) + ")"
-		}
-
-		ret.ProcessedString += " - " + isp
-	}
-
-	render.JSON(w, r, ret)
 }
