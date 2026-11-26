@@ -6,7 +6,7 @@ require (
 	github.com/breml/rootcerts v0.2.1
 	github.com/coreos/go-systemd/v22 v22.4.0
 	github.com/denisenkom/go-mssqldb v0.12.3
-	github.com/go-chi/chi/v5 v5.3.0
+	github.com/go-chi/chi/v5 v5.5.0
 	github.com/go-chi/cors v1.2.0
 	github.com/go-chi/render v1.0.1
 	github.com/go-sql-driver/mysql v1.6.0
