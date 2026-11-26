@@ -332,15 +332,13 @@ func Record(w http.ResponseWriter, r *http.Request) {
 	jitter := capString(r.FormValue("jitter"), maxShortFieldLen)
 	logs := capString(r.FormValue("log"), maxLogFieldLen)
 	extra := capString(r.FormValue("extra"), maxTextFieldLen)
+	logs = redactTelemetryLogs(logs, conf.RedactIP)
 
 	if conf.RedactIP {
 		ipAddr = "0.0.0.0"
 		ispInfo = ipv4Regex.ReplaceAllString(ispInfo, "0.0.0.0")
-		logs = ipv4Regex.ReplaceAllString(logs, "0.0.0.0")
 		ispInfo = ipv6Regex.ReplaceAllString(ispInfo, "::")
-		logs = ipv6Regex.ReplaceAllString(logs, "::")
 		ispInfo = hostnameRegex.ReplaceAllString(ispInfo, `"hostname":"REDACTED"`)
-		logs = hostnameRegex.ReplaceAllString(logs, `"hostname":"REDACTED"`)
 		ispInfo = redactLocationMetadata(ispInfo)
 	}
 
@@ -626,10 +624,17 @@ func exportPNGISP(processedString string, disableIPInfo bool) string {
 	return extractISP(processedString)
 }
 
+func redactTelemetryLogs(logs string, redactIP bool) string {
+	if redactIP {
+		return ""
+	}
+	return logs
+}
+
 func redactLocationMetadata(ispInfo string) string {
 	var result Result
 	if err := json.Unmarshal([]byte(ispInfo), &result); err != nil {
-		return ispInfo
+		return "{}"
 	}
 	result.RawISPInfo.Location = ""
 	if result.Location != nil {

@@ -57,6 +57,10 @@ func TestGetIPInfoTransportErrorDoesNotLeakAPIKey(t *testing.T) {
 	oldClient := ipInfoHTTPClient
 	oldOutput := log.StandardLogger().Out
 	var logOutput bytes.Buffer
+	ipInfoFailureMu.Lock()
+	oldCooldown := ipInfoFailureCooldownUntil
+	ipInfoFailureCooldownUntil = time.Time{}
+	ipInfoFailureMu.Unlock()
 
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -75,6 +79,9 @@ func TestGetIPInfoTransportErrorDoesNotLeakAPIKey(t *testing.T) {
 		ipInfoBaseURL = oldBaseURL
 		ipInfoHTTPClient = oldClient
 		log.SetOutput(oldOutput)
+		ipInfoFailureMu.Lock()
+		ipInfoFailureCooldownUntil = oldCooldown
+		ipInfoFailureMu.Unlock()
 		config.Load("../settings.toml")
 	})
 
@@ -104,13 +111,14 @@ func TestGetIPInfoFailureCooldown(t *testing.T) {
 		}),
 	}
 	ipInfoFailureMu.Lock()
+	oldCooldown := ipInfoFailureCooldownUntil
 	ipInfoFailureCooldownUntil = time.Time{}
 	ipInfoFailureMu.Unlock()
 	t.Cleanup(func() {
 		ipInfoHTTPClient = oldClient
 		ipInfoBaseURL = oldBaseURL
 		ipInfoFailureMu.Lock()
-		ipInfoFailureCooldownUntil = time.Time{}
+		ipInfoFailureCooldownUntil = oldCooldown
 		ipInfoFailureMu.Unlock()
 		config.Load("../settings.toml")
 	})

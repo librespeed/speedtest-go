@@ -285,3 +285,15 @@ func TestRedactLocationMetadataClearsCoordinates(t *testing.T) {
 		t.Fatalf("non-coordinate location fields should remain: %#v", result.Location)
 	}
 }
+
+func TestRedactionClearsLogsAndMalformedLocationPayload(t *testing.T) {
+	if got := redactTelemetryLogs("debug 128.94.2.134 36.6676,-78.3875", true); got != "" {
+		t.Fatalf("redacted telemetry logs should be empty: %q", got)
+	}
+	if got := redactTelemetryLogs("debug log", false); got != "debug log" {
+		t.Fatalf("non-redacted telemetry logs changed: %q", got)
+	}
+	if got := redactLocationMetadata(`{"location":{"latitude":36.6676,"longitude":-78.3875`); got != "{}" {
+		t.Fatalf("malformed ISP payload should be removed under redaction: %q", got)
+	}
+}
