@@ -248,7 +248,7 @@ func TestNormalizeGeoIPMaxMindCityFormat(t *testing.T) {
 	if geo.Latitude == nil || geo.Longitude == nil {
 		t.Fatalf("missing coordinates: %#v", geo)
 	}
-	if geo.Location != "36.667600,-78.387500" {
+	if geo.Location != "36.668,-78.388" {
 		t.Fatalf("unexpected normalized loc: %q", geo.Location)
 	}
 }
@@ -274,7 +274,7 @@ func TestOfflineGeoIPFallback(t *testing.T) {
 			Timezone:    "America/New_York",
 			Latitude:    &latitude,
 			Longitude:   &longitude,
-			Location:    "36.667600,-78.387500",
+			Location:    "36.668,-78.388",
 		}
 	}
 	t.Cleanup(func() {
@@ -368,7 +368,7 @@ func TestCountryConflictKeepsGeoIPPrimary(t *testing.T) {
 			Timezone:    "America/Toronto",
 			Latitude:    &latitude,
 			Longitude:   &longitude,
-			Location:    "43.653200,-79.383200",
+			Location:    "43.653,-79.383",
 		}
 	}
 	t.Cleanup(func() {
@@ -387,7 +387,7 @@ func TestCountryConflictKeepsGeoIPPrimary(t *testing.T) {
 	if info.City != "Toronto" || info.Region != "Ontario" {
 		t.Fatalf("GeoIP city/region should remain primary: %#v", info)
 	}
-	if info.Location != "43.653200,-79.383200" {
+	if info.Location != "43.653,-79.383" {
 		t.Fatalf("GeoIP coordinates should remain primary: %q", info.Location)
 	}
 	if location == nil || location.Source != "geoip" {
@@ -425,7 +425,7 @@ func TestGeoIPPrimaryKeepsGeoIPSource(t *testing.T) {
 			Timezone:    "America/New_York",
 			Latitude:    &latitude,
 			Longitude:   &longitude,
-			Location:    "36.667600,-78.387500",
+			Location:    "36.668,-78.388",
 		}
 	}
 	t.Cleanup(func() {
@@ -435,7 +435,7 @@ func TestGeoIPPrimaryKeepsGeoIPSource(t *testing.T) {
 	})
 
 	info, location := getIPInfoAndLocationByPriority("128.94.2.134")
-	if info.Location != "36.667600,-78.387500" {
+	if info.Location != "36.668,-78.388" {
 		t.Fatalf("valid GeoIP legacy loc should fill missing API loc: %q", info.Location)
 	}
 	if location == nil || location.Source != "geoip" {
@@ -466,7 +466,7 @@ func TestInvalidAPILocIsReplacedByValidGeoIPLoc(t *testing.T) {
 			City:      "Boydton",
 			Latitude:  &latitude,
 			Longitude: &longitude,
-			Location:  "36.667600,-78.387500",
+			Location:  "36.668,-78.388",
 		}
 	}
 	t.Cleanup(func() {
@@ -476,7 +476,7 @@ func TestInvalidAPILocIsReplacedByValidGeoIPLoc(t *testing.T) {
 	})
 
 	info, location := getIPInfoAndLocationByPriority("128.94.2.134")
-	if info.Location != "36.667600,-78.387500" {
+	if info.Location != "36.668,-78.388" {
 		t.Fatalf("invalid API loc should be replaced by valid GeoIP loc: %q", info.Location)
 	}
 	if location == nil || location.Latitude == nil || location.Longitude == nil {
@@ -521,7 +521,7 @@ func TestCountryNameOnlyAPIRecordIsReconciled(t *testing.T) {
 			Region:      "Ontario",
 			Latitude:    &latitude,
 			Longitude:   &longitude,
-			Location:    "43.653200,-79.383200",
+			Location:    "43.653,-79.383",
 		}
 	}
 	t.Cleanup(func() {
@@ -563,7 +563,7 @@ func TestMetroMismatchKeepsGeoIPPrimary(t *testing.T) {
 			Country:     "US",
 			Latitude:    &latitude,
 			Longitude:   &longitude,
-			Location:    "43.653200,-79.383200",
+			Location:    "43.653,-79.383",
 		}
 	}
 	t.Cleanup(func() {
@@ -573,7 +573,7 @@ func TestMetroMismatchKeepsGeoIPPrimary(t *testing.T) {
 	})
 
 	info, location := getIPInfoAndLocationByPriority("128.94.2.134")
-	if info.Location != "43.653200,-79.383200" {
+	if info.Location != "43.653,-79.383" {
 		t.Fatalf("GeoIP loc should remain primary for a metro conflict: %q", info.Location)
 	}
 	if location == nil || location.City != "Toronto" {
@@ -609,7 +609,7 @@ func TestSetServerLocationAcceptsExplicitZeroCoordinates(t *testing.T) {
 	}
 }
 
-func TestMergeLocationsAdoptsFallbackGeographyUnit(t *testing.T) {
+func TestMergeLocationsPreservesPrimaryCoordinates(t *testing.T) {
 	primaryLat := 43.6532
 	primaryLon := -79.3832
 	fallbackLat := 38.9072
@@ -632,12 +632,35 @@ func TestMergeLocationsAdoptsFallbackGeographyUnit(t *testing.T) {
 	}
 
 	merged := mergeLocations(primary, fallback)
+	if merged.City != "" || merged.Region != "" {
+		t.Fatalf("fallback geography should not fill over existing primary coordinates: %#v", merged)
+	}
+	if merged.Latitude == nil || *merged.Latitude != primaryLat ||
+		merged.Longitude == nil || *merged.Longitude != primaryLon {
+		t.Fatalf("primary coordinates should remain authoritative: %#v", merged)
+	}
+}
+
+func TestMergeLocationsAdoptsFallbackWithoutPrimaryGeography(t *testing.T) {
+	fallbackLat := 38.9072
+	fallbackLon := -77.0369
+	primary := &results.Location{Country: "US", Source: "geoip"}
+	fallback := &results.Location{
+		City:        "Washington",
+		Region:      "District of Columbia",
+		Country:     "US",
+		CountryName: "United States",
+		Latitude:    &fallbackLat,
+		Longitude:   &fallbackLon,
+		Source:      "ipinfo",
+	}
+	merged := mergeLocations(primary, fallback)
 	if merged.City != "Washington" || merged.Region != "District of Columbia" {
-		t.Fatalf("fallback geography should adopt city/region together: %#v", merged)
+		t.Fatalf("fallback geography should fill missing primary city/region: %#v", merged)
 	}
 	if merged.Latitude == nil || *merged.Latitude != fallbackLat ||
 		merged.Longitude == nil || *merged.Longitude != fallbackLon {
-		t.Fatalf("fallback coordinates should replace incomplete primary geography: %#v", merged)
+		t.Fatalf("fallback coordinates should fill missing primary coordinates: %#v", merged)
 	}
 }
 

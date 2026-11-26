@@ -463,11 +463,10 @@ func DrawPNG(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var result Result
-	if !conf.DisableIPInfo {
+	if !conf.DisableIPInfo && !conf.RedactIP {
 		if err := json.Unmarshal([]byte(record.ISPInfo), &result); err != nil {
 			log.Errorf("Error parsing ISP info: %s", err)
-			w.WriteHeader(http.StatusInternalServerError)
-			return
+			result = Result{}
 		}
 	}
 
@@ -545,7 +544,7 @@ func DrawPNG(w http.ResponseWriter, r *http.Request) {
 	fillRect(canvas, 0, barY, canvasWidth, 1, colorBorder)
 	footerY := barY + 19
 
-	isp := exportPNGISP(result.ProcessedString, result.RawISPInfo, conf.DisableIPInfo)
+	isp := exportPNGISP(result.ProcessedString, result.RawISPInfo, conf.DisableIPInfo || conf.RedactIP)
 	if isp != "" {
 		drawer.Face = footerFace
 		drawer.Src = image.NewUniform(colorMuted)

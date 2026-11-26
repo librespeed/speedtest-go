@@ -219,7 +219,7 @@ func TestGetIPMalformedLocationHasNoEmptyDistanceSuffix(t *testing.T) {
 }
 
 func TestIPv6LinkLocalPrivateClassification(t *testing.T) {
-	for _, address := range []string{"fe80::1", "fe90::1", "FEB0::1234"} {
+	for _, address := range []string{"fe80::1", "fe90::1", "FEB0::1234", "fe80::1%eth0"} {
 		if got := classifyPrivateIP(address); got != "link-local IPv6 access" {
 			t.Fatalf("IPv6 link-local address %q classified as %q", address, got)
 		}

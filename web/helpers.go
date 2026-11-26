@@ -677,7 +677,7 @@ func normalizeGeoIPResult(ipinfoResult map[string]interface{}) *GeoIPData {
 	if latitudeOK && longitudeOK && validCoordinates(latitude, longitude) {
 		result.Latitude = float64Pointer(latitude)
 		result.Longitude = float64Pointer(longitude)
-		result.Location = fmt.Sprintf("%.6f,%.6f", latitude, longitude)
+		result.Location = fmt.Sprintf("%.3f,%.3f", latitude, longitude)
 	}
 
 	if result.ASName == "" &&
@@ -782,6 +782,19 @@ func locationFromGeoIPData(geo *GeoIPData) *results.Location {
 	return location
 }
 
+func syncLegacyLocation(info *results.IPInfoResponse, location *results.Location) {
+	if info == nil {
+		return
+	}
+	if location == nil || location.Latitude == nil || location.Longitude == nil {
+		info.Location = ""
+		return
+	}
+	info.Location = fmt.Sprintf("%.3f,%.3f",
+		*location.Latitude,
+		*location.Longitude)
+}
+
 func mergeLocations(primary, fallback *results.Location) *results.Location {
 	if primary == nil {
 		return fallback
@@ -797,14 +810,19 @@ func mergeLocations(primary, fallback *results.Location) *results.Location {
 		fallback.Region != "" &&
 		!strings.EqualFold(strings.TrimSpace(primary.Region), strings.TrimSpace(fallback.Region))
 	coordinatesConflict := cityConflict || regionConflict
+	primaryHasCoordinates := primary.Latitude != nil && primary.Longitude != nil
 	if primary.City == "" {
-		if fallback.City != "" {
+		if fallback.City != "" && !primaryHasCoordinates {
 			primary.City = fallback.City
 			if fallback.Region != "" {
 				primary.Region = fallback.Region
 			}
-			primary.Latitude = fallback.Latitude
-			primary.Longitude = fallback.Longitude
+			if primary.Latitude == nil {
+				primary.Latitude = fallback.Latitude
+			}
+			if primary.Longitude == nil {
+				primary.Longitude = fallback.Longitude
+			}
 			contributed = true
 		}
 	} else if !cityConflict {
@@ -980,5 +998,6 @@ func getIPInfoAndLocationByPriority(addr string) (results.IPInfoResponse, *resul
 	} else if apiLocation != nil && !geographicFieldsConflict(&api, geo) {
 		location = mergeLocations(location, apiLocation)
 	}
+	syncLegacyLocation(&info, location)
 	return info, location
 }
