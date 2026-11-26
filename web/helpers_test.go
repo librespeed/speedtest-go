@@ -609,6 +609,33 @@ func TestSetServerLocationAcceptsExplicitZeroCoordinates(t *testing.T) {
 	}
 }
 
+func TestServerLocationConfigurationRequiresBothKeys(t *testing.T) {
+	tempFile := t.TempDir() + "/settings.toml"
+	if err := os.WriteFile(tempFile, []byte("server_lat=12.34\n"), 0o600); err != nil {
+		t.Fatalf("write partial server coordinate config: %v", err)
+	}
+	conf := config.Load(tempFile)
+	if conf.ServerLocationConfigured {
+		t.Fatal("one configured server coordinate key should not mark the pair explicit")
+	}
+}
+
+func TestServerLocationConfigurationAcceptsEnvironmentPair(t *testing.T) {
+	t.Setenv("SPEEDTEST_SERVER_LAT", "12.34")
+	t.Setenv("SPEEDTEST_SERVER_LNG", "-56.78")
+	tempFile := t.TempDir() + "/settings.toml"
+	if err := os.WriteFile(tempFile, []byte("disable_ipinfo=false\n"), 0o600); err != nil {
+		t.Fatalf("write environment server config: %v", err)
+	}
+	conf := config.Load(tempFile)
+	if !conf.ServerLocationConfigured {
+		t.Fatal("both environment server coordinates should mark the pair explicit")
+	}
+	if conf.ServerLat != 12.34 || conf.ServerLng != -56.78 {
+		t.Fatalf("unexpected environment server coordinates: %.6f, %.6f", conf.ServerLat, conf.ServerLng)
+	}
+}
+
 func TestMergeLocationsPreservesPrimaryCoordinates(t *testing.T) {
 	primaryLat := 43.6532
 	primaryLon := -79.3832
@@ -686,6 +713,22 @@ func TestSyncLegacyLocationUsesFinalMergedPlace(t *testing.T) {
 		info.Country != "US" || info.CountryName != "United States" ||
 		info.Location != "38.907,-77.037" {
 		t.Fatalf("legacy fields should sync to final location: %#v", info)
+	}
+}
+
+func TestSyncLegacyLocationPreservesTextWhenCoordinatesMissing(t *testing.T) {
+	info := results.IPInfoResponse{}
+	location := &results.Location{
+		City:        "Boydton",
+		Region:      "Virginia",
+		Country:     "US",
+		CountryName: "United States",
+	}
+	syncLegacyLocation(&info, location)
+	if info.City != "Boydton" || info.Region != "Virginia" ||
+		info.Country != "US" || info.CountryName != "United States" ||
+		info.Location != "" {
+		t.Fatalf("legacy text should survive missing coordinates: %#v", info)
 	}
 }
 

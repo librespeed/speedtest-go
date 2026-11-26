@@ -788,8 +788,16 @@ func syncLegacyLocation(info *results.IPInfoResponse, location *results.Location
 	}
 	if location == nil || location.Latitude == nil || location.Longitude == nil {
 		info.Location = ""
-		info.City = ""
-		info.Region = ""
+		if location != nil {
+			info.City = strings.TrimSpace(location.City)
+			info.Region = strings.TrimSpace(location.Region)
+			if strings.TrimSpace(location.CountryName) != "" {
+				info.CountryName = strings.TrimSpace(location.CountryName)
+			}
+			if strings.TrimSpace(location.Country) != "" {
+				info.Country = strings.TrimSpace(location.Country)
+			}
+		}
 		return
 	}
 	info.City = strings.TrimSpace(location.City)
