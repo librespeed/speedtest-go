@@ -248,19 +248,47 @@ func TestLegacyISPPayloadCompatibility(t *testing.T) {
 
 func TestSavedResultExportsHonorDisableIPInfo(t *testing.T) {
 	processed := "128.94.2.134 - Microsoft Corporation, United States (15 mi)"
+	raw := IPInfoResponse{
+		Organization: "AS8075 Microsoft Corporation",
+		CountryName:  "United States",
+	}
 
-	if got := exportJSONISPName(processed, true); got != "" {
+	if got := exportJSONISPName(processed, raw, true); got != "" {
 		t.Fatalf("JSON export leaked ISP metadata while disabled: %q", got)
 	}
-	if got := exportPNGISP(processed, true); got != "" {
+	if got := exportPNGISP(processed, raw, true); got != "" {
 		t.Fatalf("PNG export leaked ISP metadata while disabled: %q", got)
 	}
 
-	if got := exportJSONISPName(processed, false); got == "" {
+	if got := exportJSONISPName(processed, raw, false); got == "" {
 		t.Fatal("JSON export lost ISP metadata when IP info is enabled")
 	}
-	if got := exportPNGISP(processed, false); got == "" {
+	if got := exportPNGISP(processed, raw, false); got == "" {
 		t.Fatal("PNG export lost ISP metadata when IP info is enabled")
+	}
+
+	if got := exportJSONISPName("", raw, false); got != "Microsoft Corporation, United States" {
+		t.Fatalf("JSON export should fall back to raw ISP data: %q", got)
+	}
+	if got := exportPNGISP("", raw, false); got != "ISP: Microsoft Corporation, United States" {
+		t.Fatalf("PNG export should fall back to raw ISP data: %q", got)
+	}
+	if got := exportJSONISPName("10.0.0.25 - private IPv4 access", IPInfoResponse{}, false); got != "" {
+		t.Fatalf("private-IP JSON export should not look like an ISP: %q", got)
+	}
+	if got := exportPNGISP("10.0.0.25 - private IPv4 access", IPInfoResponse{}, false); got != "" {
+		t.Fatalf("private-IP PNG export should not look like an ISP: %q", got)
+	}
+	privateRaw := IPInfoResponse{
+		IP:           "10.0.0.25",
+		Organization: "Example Org",
+		Country:      "US",
+	}
+	if got := exportJSONISPName("", privateRaw, false); got != "" {
+		t.Fatalf("raw-only private-IP JSON export should not look like an ISP: %q", got)
+	}
+	if got := exportPNGISP("", privateRaw, false); got != "" {
+		t.Fatalf("raw-only private-IP PNG export should not look like an ISP: %q", got)
 	}
 }
 

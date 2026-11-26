@@ -63,7 +63,7 @@ func ViewPage(w http.ResponseWriter, r *http.Request) {
 			log.Errorf("Error parsing ISP info: %s", err)
 		}
 	}
-	if conf.DisableIPInfo {
+	if conf.DisableIPInfo || conf.RedactIP {
 		ispInfo.ProcessedString = ""
 		ispInfo.RawISPInfo = IPInfoResponse{}
 		ispInfo.Location = nil
@@ -133,6 +133,10 @@ func ViewPage(w http.ResponseWriter, r *http.Request) {
 	latitude := ""
 	longitude := ""
 	locationSource := ""
+	ipAddress := record.IPAddress
+	if conf.RedactIP {
+		ipAddress = "0.0.0.0"
+	}
 	if ispInfo.Location != nil {
 		if ispInfo.Location.City != "" {
 			city = ispInfo.Location.City
@@ -192,7 +196,7 @@ func ViewPage(w http.ResponseWriter, r *http.Request) {
 		Ping:      record.Ping,
 		Jitter:    record.Jitter,
 		Timestamp: record.Timestamp.Format("2006-01-02 15:04:05"),
-		IPAddress: record.IPAddress,
+		IPAddress: ipAddress,
 		ISP: struct {
 			ProcessedString string
 			City            string

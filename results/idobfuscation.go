@@ -115,5 +115,3 @@ func ResolveID(id string) string {
 
 	return id
 }
-
-

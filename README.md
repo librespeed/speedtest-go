@@ -33,7 +33,7 @@ Works with mobile versions too.
 ### IP Detection
 
 * Client IP detection from forwarding headers (X-Forwarded-For, X-Real-IP, Client-IP, CF-Connecting-IPv6) only when the peer is a configured trusted proxy
-* ISP and location detection via ipinfo.io API with offline GeoIP database fallback (MaxMind .mmdb)
+* ISP and location detection via primary local GeoIP database (MaxMind .mmdb), with validated ipinfo.io API fallback for missing metadata
 * Private/special IP detection (including ULA IPv6 and CGNAT)
 * Distance calculation with human-friendly rounding
 
@@ -146,9 +146,9 @@ You need Go 1.21+ to compile the binary.
     proxyprotocol_port=0
     # reverse proxies whose forwarding headers may be trusted
     # trusted_proxies=["127.0.0.1/32", "::1/128"]
-    # Server location, use zeroes to fetch from API automatically
-    server_lat=0
-    server_lng=0
+    # Server location; set both keys explicitly (including 0,0) to use configured coordinates
+    # server_lat=0
+    # server_lng=0
     # ipinfo.io API key, if applicable
     ipinfo_api_key=""
     # disable ISP and approximate-location lookups and metadata
@@ -179,7 +179,7 @@ You need Go 1.21+ to compile the binary.
     # if you use `bolt` or `sqlite` as database, set database_file to database file location
     database_file="speedtest.db"
 
-    # GeoIP offline database (.mmdb format) for ISP detection fallback (optional)
+    # GeoIP database (.mmdb format) for primary ISP/location detection (optional)
     # Leave empty to disable.
     # geoip_database_file="country_asn.mmdb"
 

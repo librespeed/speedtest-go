@@ -3,6 +3,8 @@ package results
 import (
 	"encoding/json"
 	"net/http"
+	"net/netip"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -45,11 +47,68 @@ func extractISPName(processedString string) string {
 	return isp
 }
 
-func exportJSONISPName(processedString string, disableIPInfo bool) string {
+var asOrganizationPrefix = regexp.MustCompile(`^AS\d+\s+`)
+
+func isPrivateProcessedString(processedString string) bool {
+	for _, marker := range []string{
+		" - localhost ",
+		" - link-local ",
+		" - ULA ",
+		" - private ",
+		" - CGNAT ",
+	} {
+		if strings.Contains(processedString, marker) {
+			return true
+		}
+	}
+	return false
+}
+
+func isPrivateExportIP(ip string) bool {
+	addr, err := netip.ParseAddr(strings.TrimSpace(ip))
+	if err != nil {
+		return false
+	}
+	addr = addr.WithZone("")
+	if addr.IsPrivate() || addr.IsLoopback() || addr.IsLinkLocalUnicast() || addr.IsUnspecified() {
+		return true
+	}
+	cgnat, _ := netip.ParsePrefix("100.64.0.0/10")
+	return addr.Is4() && cgnat.Contains(addr)
+}
+
+func rawISPExportLabel(raw IPInfoResponse) string {
+	organization := asOrganizationPrefix.ReplaceAllString(strings.TrimSpace(raw.Organization), "")
+	if organization == "" {
+		organization = strings.TrimSpace(raw.ASName)
+	}
+	if organization == "" {
+		return ""
+	}
+	country := strings.TrimSpace(raw.Country)
+	if country == "" {
+		country = strings.TrimSpace(raw.CountryName)
+	}
+	if country != "" {
+		return organization + ", " + country
+	}
+	return organization
+}
+
+func exportJSONISPName(processedString string, raw IPInfoResponse, disableIPInfo bool) string {
 	if disableIPInfo {
 		return ""
 	}
-	return extractISPName(processedString)
+	if isPrivateProcessedString(processedString) {
+		return ""
+	}
+	if raw.IP != "" && isPrivateExportIP(raw.IP) {
+		return ""
+	}
+	if name := extractISPName(processedString); name != "" {
+		return name
+	}
+	return rawISPExportLabel(raw)
 }
 
 // JSONResponse is the structure returned by the JSON results endpoint
@@ -99,9 +158,9 @@ func JSONResult(w http.ResponseWriter, r *http.Request) {
 	// Extract ISP name from ISP info JSON
 	var result Result
 	if conf.DisableIPInfo {
-		resp.ISPInfo = exportJSONISPName("", true)
+		resp.ISPInfo = exportJSONISPName("", IPInfoResponse{}, true)
 	} else if err := json.Unmarshal([]byte(record.ISPInfo), &result); err == nil {
-		resp.ISPInfo = exportJSONISPName(result.ProcessedString, conf.DisableIPInfo)
+		resp.ISPInfo = exportJSONISPName(result.ProcessedString, result.RawISPInfo, conf.DisableIPInfo)
 	}
 
 	w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0, s-maxage=0")

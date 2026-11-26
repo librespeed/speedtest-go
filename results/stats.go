@@ -176,6 +176,13 @@ func Stats(w http.ResponseWriter, r *http.Request) {
 						records[i].Log = ""
 					}
 				}
+				if conf.RedactIP {
+					for i := range records {
+						records[i].IPAddress = "0.0.0.0"
+						records[i].ISPInfo = ""
+						records[i].Log = ""
+					}
+				}
 				data.Data = records
 				data.TotalTests = total
 				data.CurrentPage = page

@@ -545,7 +545,7 @@ func DrawPNG(w http.ResponseWriter, r *http.Request) {
 	fillRect(canvas, 0, barY, canvasWidth, 1, colorBorder)
 	footerY := barY + 19
 
-	isp := exportPNGISP(result.ProcessedString, conf.DisableIPInfo)
+	isp := exportPNGISP(result.ProcessedString, result.RawISPInfo, conf.DisableIPInfo)
 	if isp != "" {
 		drawer.Face = footerFace
 		drawer.Src = image.NewUniform(colorMuted)
@@ -617,11 +617,23 @@ func extractISP(processed string) string {
 	return ""
 }
 
-func exportPNGISP(processedString string, disableIPInfo bool) string {
+func exportPNGISP(processedString string, raw IPInfoResponse, disableIPInfo bool) string {
 	if disableIPInfo {
 		return ""
 	}
-	return extractISP(processedString)
+	if isPrivateProcessedString(processedString) {
+		return ""
+	}
+	if raw.IP != "" && isPrivateExportIP(raw.IP) {
+		return ""
+	}
+	if isp := extractISP(processedString); isp != "" {
+		return isp
+	}
+	if label := rawISPExportLabel(raw); label != "" {
+		return "ISP: " + label
+	}
+	return ""
 }
 
 func redactTelemetryLogs(logs string, redactIP bool) string {
