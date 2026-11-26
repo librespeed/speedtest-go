@@ -3,6 +3,8 @@ package results
 import (
 	"encoding/json"
 	"testing"
+
+	"github.com/librespeed/speedtest-go/database/schema"
 )
 
 func TestRedactLocationMetadata(t *testing.T) {
@@ -290,6 +292,19 @@ func TestSavedResultExportsHonorDisableIPInfo(t *testing.T) {
 	if got := exportPNGISP("", privateRaw, false); got != "" {
 		t.Fatalf("raw-only private-IP PNG export should not look like an ISP: %q", got)
 	}
+	for _, mappedPrivate := range []string{"::ffff:10.0.0.25", "::ffff:100.64.0.1", "::ffff:127.0.0.1", "::"} {
+		raw := IPInfoResponse{
+			IP:           mappedPrivate,
+			Organization: "Example Org",
+			Country:      "US",
+		}
+		if got := exportJSONISPName("", raw, false); got != "" {
+			t.Fatalf("mapped-private JSON export should be suppressed for %q: %q", mappedPrivate, got)
+		}
+		if got := exportPNGISP("", raw, false); got != "" {
+			t.Fatalf("mapped-private PNG export should be suppressed for %q: %q", mappedPrivate, got)
+		}
+	}
 }
 
 func TestRedactLocationMetadataClearsCoordinates(t *testing.T) {
@@ -323,5 +338,29 @@ func TestRedactionClearsLogsAndMalformedLocationPayload(t *testing.T) {
 	}
 	if got := redactLocationMetadata(`{"location":{"latitude":36.6676,"longitude":-78.3875`); got != "{}" {
 		t.Fatalf("malformed ISP payload should be removed under redaction: %q", got)
+	}
+}
+
+func TestSanitizeStatsRecordHonorsRedaction(t *testing.T) {
+	record := schema.TelemetryData{
+		IPAddress: "203.0.113.42",
+		ISPInfo:   `{"location":{"latitude":36.6676,"longitude":-78.3875}}`,
+		Log:       "debug 203.0.113.42",
+	}
+	sanitizeStatsRecord(&record, false, true)
+	if record.IPAddress != "0.0.0.0" {
+		t.Fatalf("stats IP should be redacted: %q", record.IPAddress)
+	}
+	if record.ISPInfo != "" || record.Log != "" {
+		t.Fatalf("stats ISP/log should be removed under redaction: isp=%q log=%q", record.ISPInfo, record.Log)
+	}
+}
+
+func TestParseSavedResultForExportToleratesEmptyAndMalformed(t *testing.T) {
+	for _, payload := range []string{"", "{malformed"} {
+		result := parseSavedResultForExport(payload, false)
+		if result.ProcessedString != "" || result.RawISPInfo.Organization != "" {
+			t.Fatalf("empty/malformed payload should produce no ISP: %#v", result)
+		}
 	}
 }

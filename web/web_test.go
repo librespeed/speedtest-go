@@ -224,6 +224,11 @@ func TestIPv6LinkLocalPrivateClassification(t *testing.T) {
 			t.Fatalf("IPv6 link-local address %q classified as %q", address, got)
 		}
 	}
+	for _, address := range []string{"fd00::1", "fd12:3456::1", "fd00::1%eth0"} {
+		if got := classifyPrivateIP(address); got != "ULA IPv6 access" {
+			t.Fatalf("IPv6 ULA address %q classified as %q", address, got)
+		}
+	}
 }
 
 func TestGetIPPrivateIPBypassesProviderLookups(t *testing.T) {

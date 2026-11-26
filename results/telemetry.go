@@ -462,13 +462,7 @@ func DrawPNG(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var result Result
-	if !conf.DisableIPInfo && !conf.RedactIP {
-		if err := json.Unmarshal([]byte(record.ISPInfo), &result); err != nil {
-			log.Errorf("Error parsing ISP info: %s", err)
-			result = Result{}
-		}
-	}
+	result := parseSavedResultForExport(record.ISPInfo, conf.DisableIPInfo || conf.RedactIP)
 
 	canvas := image.NewRGBA(image.Rect(0, 0, canvasWidth, canvasHeight))
 	draw.Draw(canvas, canvas.Bounds(), image.NewUniform(colorBg), image.Point{}, draw.Src)
@@ -614,6 +608,17 @@ func extractISP(processed string) string {
 		}
 	}
 	return ""
+}
+
+func parseSavedResultForExport(recordISPInfo string, suppress bool) Result {
+	if suppress || strings.TrimSpace(recordISPInfo) == "" {
+		return Result{}
+	}
+	var result Result
+	if err := json.Unmarshal([]byte(recordISPInfo), &result); err != nil {
+		return Result{}
+	}
+	return result
 }
 
 func exportPNGISP(processedString string, raw IPInfoResponse, disableIPInfo bool) string {

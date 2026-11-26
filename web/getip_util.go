@@ -39,13 +39,15 @@ func classifyPrivateIP(ip string) string {
 
 // isULAIPv6 checks if an IP is a Unique Local IPv6 Unicast Address (fc00::/7).
 func isULAIPv6(ipStr string) bool {
-	ip := net.ParseIP(ipStr)
-	if ip == nil || ip.To16() == nil {
+	addr, err := netip.ParseAddr(ipStr)
+	if err != nil || !addr.Is6() {
 		return false
 	}
+	addr = addr.WithZone("")
+	bytes := addr.As16()
 	// fc00::/7 means the first 7 bits are 1111110
 	// So the first byte & 0xFE must equal 0xFC
-	return ip[0]&0xFE == 0xFC
+	return bytes[0]&0xFE == 0xFC
 }
 
 // mustCompile is a helper that compiles a regex and panics on error

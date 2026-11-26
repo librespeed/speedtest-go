@@ -69,7 +69,7 @@ func isPrivateExportIP(ip string) bool {
 	if err != nil {
 		return false
 	}
-	addr = addr.WithZone("")
+	addr = addr.WithZone("").Unmap()
 	if addr.IsPrivate() || addr.IsLoopback() || addr.IsLinkLocalUnicast() || addr.IsUnspecified() {
 		return true
 	}

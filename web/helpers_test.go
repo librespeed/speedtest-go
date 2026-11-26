@@ -618,6 +618,9 @@ func TestServerLocationConfigurationRequiresBothKeys(t *testing.T) {
 	if conf.ServerLocationConfigured {
 		t.Fatal("one configured server coordinate key should not mark the pair explicit")
 	}
+	t.Cleanup(func() {
+		config.Load("../settings.toml")
+	})
 }
 
 func TestServerLocationConfigurationAcceptsEnvironmentPair(t *testing.T) {
@@ -631,6 +634,9 @@ func TestServerLocationConfigurationAcceptsEnvironmentPair(t *testing.T) {
 	if !conf.ServerLocationConfigured {
 		t.Fatal("both environment server coordinates should mark the pair explicit")
 	}
+	t.Cleanup(func() {
+		config.Load("../settings.toml")
+	})
 	if conf.ServerLat != 12.34 || conf.ServerLng != -56.78 {
 		t.Fatalf("unexpected environment server coordinates: %.6f, %.6f", conf.ServerLat, conf.ServerLng)
 	}

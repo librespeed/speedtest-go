@@ -17,6 +17,16 @@ import (
 	"github.com/librespeed/speedtest-go/database/schema"
 )
 
+func sanitizeStatsRecord(record *schema.TelemetryData, disableIPInfo, redactIP bool) {
+	if disableIPInfo || redactIP {
+		record.ISPInfo = ""
+		record.Log = ""
+	}
+	if redactIP {
+		record.IPAddress = "0.0.0.0"
+	}
+}
+
 type StatsData struct {
 	NoPassword    bool
 	LoggedIn      bool
@@ -173,15 +183,12 @@ func Stats(w http.ResponseWriter, r *http.Request) {
 
 				if conf.DisableIPInfo {
 					for i := range records {
-						records[i].ISPInfo = ""
-						records[i].Log = ""
+						sanitizeStatsRecord(&records[i], true, conf.RedactIP)
 					}
 				}
 				if conf.RedactIP {
 					for i := range records {
-						records[i].IPAddress = "0.0.0.0"
-						records[i].ISPInfo = ""
-						records[i].Log = ""
+						sanitizeStatsRecord(&records[i], conf.DisableIPInfo, true)
 					}
 				}
 				data.Data = records
