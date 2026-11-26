@@ -170,6 +170,12 @@ func Stats(w http.ResponseWriter, r *http.Request) {
 					}
 				}
 
+				if conf.DisableIPInfo {
+					for i := range records {
+						records[i].ISPInfo = ""
+						records[i].Log = ""
+					}
+				}
 				data.Data = records
 				data.TotalTests = total
 				data.CurrentPage = page

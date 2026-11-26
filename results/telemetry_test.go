@@ -5,6 +5,23 @@ import (
 	"testing"
 )
 
+func TestRedactLocationMetadata(t *testing.T) {
+	input := `{"processedString":"128.94.2.134 - Example ISP, US","rawIspInfo":{"ip":"128.94.2.134","loc":"36.6676,-78.3875"},"location":{"city":"Boydton","latitude":36.6676,"longitude":-78.3875,"loc":"36.6676,-78.3875","location":"36.6676,-78.3875"}}`
+
+	redacted := redactLocationMetadata(input)
+	var result Result
+	if err := json.Unmarshal([]byte(redacted), &result); err != nil {
+		t.Fatalf("decode redacted payload: %v", err)
+	}
+	if result.RawISPInfo.Location != "" {
+		t.Fatalf("rawIspInfo loc should be omitted when IP redaction is enabled: %q", result.RawISPInfo.Location)
+	}
+	if result.Location != nil &&
+		(result.Location.Latitude != nil || result.Location.Longitude != nil) {
+		t.Fatalf("location coordinates should be omitted when IP redaction is enabled: %#v", result.Location)
+	}
+}
+
 func TestIPRedaction(t *testing.T) {
 	tests := []struct {
 		name     string
