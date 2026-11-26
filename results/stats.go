@@ -24,6 +24,7 @@ type StatsData struct {
 	UniqueDevices int
 	UniqueIPs     map[string]bool
 	DeviceGroups  []DeviceGroup
+	IPRedacted    bool
 
 	// pagination
 	TotalTests  int
@@ -184,6 +185,7 @@ func Stats(w http.ResponseWriter, r *http.Request) {
 					}
 				}
 				data.Data = records
+				data.IPRedacted = conf.RedactIP
 				data.TotalTests = total
 				data.CurrentPage = page
 				data.TotalPages = totalPages
@@ -737,7 +739,7 @@ const statsTemplate = `<!DOCTYPE html>
 						{{ else }}
 							<span class="badge">📊 {{ .TotalTests }} total test{{ if gt .TotalTests 1 }}s{{ end }}</span>
 							{{ if gt .UniqueDevices 0 }}<span class="badge badge-device">🖥 {{ .UniqueDevices }} unique device{{ if gt .UniqueDevices 1 }}s{{ end }}</span>{{ end }}
-							<span class="badge">{{ len .UniqueIPs }} unique IP{{ if gt (len .UniqueIPs) 1 }}s{{ end }} on this page</span>
+							{{ if not .IPRedacted }}<span class="badge">{{ len .UniqueIPs }} unique IP{{ if gt (len .UniqueIPs) 1 }}s{{ end }} on this page</span>{{ end }}
 						{{ end }}
 					</div>
 				</div>
@@ -830,7 +832,7 @@ const statsTemplate = `<!DOCTYPE html>
 							<span class="device-title">⚠ Unknown device</span>
 							<span class="device-id">no client identifier</span>
 						{{ end }}
-						<span class="device-meta">{{ .TestCount }} test{{ if gt .TestCount 1 }}s{{ end }} · {{ len .IPs }} IP{{ if gt (len .IPs) 1 }}s{{ end }}{{ range .IPs }} · {{ . }}{{ end }}</span>
+						<span class="device-meta">{{ .TestCount }} test{{ if gt .TestCount 1 }}s{{ end }}{{ if not $.IPRedacted }} · {{ len .IPs }} IP{{ if gt (len .IPs) 1 }}s{{ end }}{{ range .IPs }} · {{ . }}{{ end }}{{ end }}</span>
 					</div>
 
 					<div class="results-grid">
