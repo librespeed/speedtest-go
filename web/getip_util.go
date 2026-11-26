@@ -16,7 +16,7 @@ func classifyPrivateIP(ip string) string {
 	switch {
 	case ip == "::1":
 		return "localhost IPv6 access"
-	case strings.HasPrefix(ip, "fe80:"):
+	case isLinkLocalIPv6(ip):
 		return "link-local IPv6 access"
 	// ULA IPv6 (fc00::/7): fc00:: - fdff:ffff:...
 	case isULAIPv6(ip):

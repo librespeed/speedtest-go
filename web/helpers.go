@@ -151,7 +151,7 @@ func SetServerLocation(conf *config.Config) {
 		log.Info("IP-derived location metadata is disabled")
 		return
 	}
-	if conf.ServerLat != 0 || conf.ServerLng != 0 {
+	if conf.ServerLocationConfigured || (conf.ServerLat != 0 && conf.ServerLng != 0) {
 		if validCoordinates(conf.ServerLat, conf.ServerLng) {
 			log.Infof("Configured server coordinates: %.6f, %.6f", conf.ServerLat, conf.ServerLng)
 			serverCoord.Lat = conf.ServerLat
@@ -334,8 +334,8 @@ func normalizeIPInfoResponse(info *results.IPInfoResponse) {
 	countryCode := normalizeCountryCode(info.Country)
 	if countryCode != "" {
 		info.Country = countryCode
-		if info.CountryName == "" {
-			info.CountryName = countryNameFromCode(countryCode)
+		if countryName := countryNameFromCode(countryCode); countryName != "" {
+			info.CountryName = countryName
 		}
 	} else if info.Country != "" && info.CountryName == "" {
 		info.CountryName = info.Country
@@ -725,6 +725,11 @@ func locationFromIPInfo(info results.IPInfoResponse) *results.Location {
 	if location.Country != "" && location.CountryName == "" {
 		location.CountryName = countryNameFromCode(location.Country)
 	}
+	if location.Country != "" {
+		if countryName := countryNameFromCode(location.Country); countryName != "" {
+			location.CountryName = countryName
+		}
+	}
 	if location.City == "" &&
 		location.Region == "" &&
 		location.Country == "" &&
@@ -759,6 +764,11 @@ func locationFromGeoIPData(geo *GeoIPData) *results.Location {
 	if location.Country != "" && location.CountryName == "" {
 		location.CountryName = countryNameFromCode(location.Country)
 	}
+	if location.Country != "" {
+		if countryName := countryNameFromCode(location.Country); countryName != "" {
+			location.CountryName = countryName
+		}
+	}
 	if location.City == "" &&
 		location.Region == "" &&
 		location.Country == "" &&
@@ -790,11 +800,15 @@ func mergeLocations(primary, fallback *results.Location) *results.Location {
 	if primary.City == "" {
 		if fallback.City != "" {
 			primary.City = fallback.City
+			if fallback.Region != "" {
+				primary.Region = fallback.Region
+			}
+			primary.Latitude = fallback.Latitude
+			primary.Longitude = fallback.Longitude
 			contributed = true
 		}
-	}
-	if primary.Region == "" {
-		if fallback.Region != "" {
+	} else if !cityConflict {
+		if primary.Region == "" && fallback.Region != "" {
 			primary.Region = fallback.Region
 			contributed = true
 		}

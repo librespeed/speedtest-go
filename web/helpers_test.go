@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -581,5 +582,72 @@ func TestMetroMismatchKeepsGeoIPPrimary(t *testing.T) {
 	if location.Latitude == nil || *location.Latitude != 43.6532 ||
 		location.Longitude == nil || *location.Longitude != -79.3832 {
 		t.Fatalf("GeoIP metro coordinates should remain: %#v", location)
+	}
+}
+
+func TestSetServerLocationAcceptsExplicitZeroCoordinates(t *testing.T) {
+	tempFile := t.TempDir() + "/settings.toml"
+	if err := os.WriteFile(tempFile, []byte("server_lat=0\nserver_lng=0\n"), 0o600); err != nil {
+		t.Fatalf("write zero-coordinate config: %v", err)
+	}
+	conf := config.Load(tempFile)
+
+	oldCoord := serverCoord
+	oldKnown := serverLocationKnown
+	t.Cleanup(func() {
+		serverCoord = oldCoord
+		serverLocationKnown = oldKnown
+		config.Load("../settings.toml")
+	})
+
+	SetServerLocation(&conf)
+	if !serverLocationKnown {
+		t.Fatal("explicit (0,0) server coordinates should be marked known")
+	}
+	if serverCoord.Lat != 0 || serverCoord.Lon != 0 {
+		t.Fatalf("unexpected explicit zero server coordinates: %#v", serverCoord)
+	}
+}
+
+func TestMergeLocationsAdoptsFallbackGeographyUnit(t *testing.T) {
+	primaryLat := 43.6532
+	primaryLon := -79.3832
+	fallbackLat := 38.9072
+	fallbackLon := -77.0369
+	primary := &results.Location{
+		Country:     "US",
+		CountryName: "United States",
+		Latitude:    &primaryLat,
+		Longitude:   &primaryLon,
+		Source:      "geoip",
+	}
+	fallback := &results.Location{
+		City:        "Washington",
+		Region:      "District of Columbia",
+		Country:     "US",
+		CountryName: "United States",
+		Latitude:    &fallbackLat,
+		Longitude:   &fallbackLon,
+		Source:      "ipinfo",
+	}
+
+	merged := mergeLocations(primary, fallback)
+	if merged.City != "Washington" || merged.Region != "District of Columbia" {
+		t.Fatalf("fallback geography should adopt city/region together: %#v", merged)
+	}
+	if merged.Latitude == nil || *merged.Latitude != fallbackLat ||
+		merged.Longitude == nil || *merged.Longitude != fallbackLon {
+		t.Fatalf("fallback coordinates should replace incomplete primary geography: %#v", merged)
+	}
+}
+
+func TestNormalizeIPInfoCountryNameReconcilesCountryCode(t *testing.T) {
+	info := results.IPInfoResponse{
+		Country:     "US",
+		CountryName: "Canada",
+	}
+	normalizeIPInfoResponse(&info)
+	if info.Country != "US" || info.CountryName != "United States" {
+		t.Fatalf("country code/name should be reconciled: %#v", info)
 	}
 }
