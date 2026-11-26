@@ -95,6 +95,16 @@ function updateUI(forced){
 	if(uiData==null) return;
 	var status=uiData.testState;
 	I("ip").textContent=uiData.clientIp;
+	if(uiData.location&&typeof uiData.location==="object"){
+		var locationParts=[
+			uiData.location.city,
+			uiData.location.region,
+			uiData.location.countryName||uiData.location.country
+		].filter(function(value){return typeof value==="string"&&value.trim()!==""});
+		if(locationParts.length>0){
+			I("ip").textContent=uiData.clientIp+" — Approximate IP location: "+locationParts.join(", ");
+		}
+	}
 	I("dlText").textContent=(status==1&&uiData.dlStatus==0)?"...":format(uiData.dlStatus);
 	drawMeter(I("dlMeter"),mbpsToAmount(Number(uiData.dlStatus*(status==1?oscillate():1))),meterBk,dlColor,Number(uiData.dlProgress),progColor);
 	I("ulText").textContent=(status==3&&uiData.ulStatus==0)?"...":format(uiData.ulStatus);

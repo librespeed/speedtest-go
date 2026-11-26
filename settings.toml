@@ -16,6 +16,8 @@ server_lat=1
 server_lng=1
 # ipinfo.io API key, if applicable
 ipinfo_api_key=""
+# disable ISP and approximate-location lookups and metadata
+disable_ipinfo=false
 
 # assets directory path, defaults to `assets` in the same directory
 assets_path=""
@@ -41,8 +43,8 @@ database_port=""
 # if you use `sqlite` as database, set database_file to database file location
 database_file="speedtest.db"
 
-# GeoIP offline database (.mmdb format) for ISP and country detection when ipinfo.io API is not available
-# This is used as a fallback, matching the PHP backend behavior.
+# GeoIP database (.mmdb format) for primary ISP/location detection (optional)
+# IPinfo is used only to fill missing metadata or when MMDB lookup is unavailable.
 # Leave empty to disable.
 # geoip_database_file="country_asn.mmdb"
 

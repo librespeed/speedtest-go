@@ -246,6 +246,19 @@ function startRenderLoop() {
       // IP info
       if (d.clientIp) {
         ipEl.innerHTML = `Connected via <strong>${d.clientIp}</strong>`;
+        if (d.location && typeof d.location === "object") {
+          const locationParts = [
+            d.location.city,
+            d.location.region,
+            d.location.countryName || d.location.country
+          ].filter((value) => typeof value === "string" && value.trim() !== "");
+          if (typeof d.location.postal === "string" && d.location.postal.trim() !== "") {
+            locationParts.push(d.location.postal);
+          }
+          if (locationParts.length > 0) {
+            ipEl.append(document.createTextNode(` — Approximate IP location: ${locationParts.join(", ")}`));
+          }
+        }
       }
 
       // results panel

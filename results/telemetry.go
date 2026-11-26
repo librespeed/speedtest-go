@@ -173,6 +173,19 @@ var (
 type Result struct {
 	ProcessedString string         `json:"processedString"`
 	RawISPInfo      IPInfoResponse `json:"rawIspInfo"`
+	Location        *Location      `json:"location,omitempty"`
+}
+
+type Location struct {
+	City        string   `json:"city,omitempty"`
+	Region      string   `json:"region,omitempty"`
+	Country     string   `json:"country,omitempty"`
+	CountryName string   `json:"countryName,omitempty"`
+	Postal      string   `json:"postal,omitempty"`
+	Timezone    string   `json:"timezone,omitempty"`
+	Latitude    *float64 `json:"latitude,omitempty"`
+	Longitude   *float64 `json:"longitude,omitempty"`
+	Source      string   `json:"source,omitempty"`
 }
 
 type IPInfoResponse struct {
@@ -181,11 +194,34 @@ type IPInfoResponse struct {
 	City         string `json:"city"`
 	Region       string `json:"region"`
 	Country      string `json:"country"`
+	CountryName  string `json:"country_name,omitempty"`
 	Location     string `json:"loc"`
 	Organization string `json:"org"`
+	ASName       string `json:"as_name,omitempty"`
 	Postal       string `json:"postal"`
 	Timezone     string `json:"timezone"`
 	Readme       string `json:"readme"`
+}
+
+// UnmarshalJSON accepts the legacy rawIspInfo object, plus empty string and
+// null payloads emitted by older or unavailable backends.
+func (info *IPInfoResponse) UnmarshalJSON(data []byte) error {
+	type plainIPInfoResponse IPInfoResponse
+	trimmed := strings.TrimSpace(string(data))
+	if trimmed == "" || trimmed == "null" || trimmed == `""` {
+		*info = IPInfoResponse{}
+		return nil
+	}
+	if !strings.HasPrefix(trimmed, "{") {
+		*info = IPInfoResponse{}
+		return nil
+	}
+	var decoded plainIPInfoResponse
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		return err
+	}
+	*info = IPInfoResponse(decoded)
+	return nil
 }
 
 func Initialize(c *config.Config) {
@@ -296,15 +332,14 @@ func Record(w http.ResponseWriter, r *http.Request) {
 	jitter := capString(r.FormValue("jitter"), maxShortFieldLen)
 	logs := capString(r.FormValue("log"), maxLogFieldLen)
 	extra := capString(r.FormValue("extra"), maxTextFieldLen)
+	logs = redactTelemetryLogs(logs, conf.RedactIP)
 
 	if conf.RedactIP {
-		ipAddr  = "0.0.0.0"
+		ipAddr = "0.0.0.0"
 		ispInfo = ipv4Regex.ReplaceAllString(ispInfo, "0.0.0.0")
-		logs    = ipv4Regex.ReplaceAllString(logs, "0.0.0.0")
 		ispInfo = ipv6Regex.ReplaceAllString(ispInfo, "::")
-		logs    = ipv6Regex.ReplaceAllString(logs, "::")
 		ispInfo = hostnameRegex.ReplaceAllString(ispInfo, `"hostname":"REDACTED"`)
-		logs    = hostnameRegex.ReplaceAllString(logs, `"hostname":"REDACTED"`)
+		ispInfo = redactLocationMetadata(ispInfo)
 	}
 
 	var record schema.TelemetryData
@@ -427,12 +462,7 @@ func DrawPNG(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var result Result
-	if err := json.Unmarshal([]byte(record.ISPInfo), &result); err != nil {
-		log.Errorf("Error parsing ISP info: %s", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
+	result := parseSavedResultForExport(record.ISPInfo, conf.DisableIPInfo || conf.RedactIP)
 
 	canvas := image.NewRGBA(image.Rect(0, 0, canvasWidth, canvasHeight))
 	draw.Draw(canvas, canvas.Bounds(), image.NewUniform(colorBg), image.Point{}, draw.Src)
@@ -447,30 +477,34 @@ func DrawPNG(w http.ResponseWriter, r *http.Request) {
 
 	// Determine layout: 5 cards when loss param is present, 4 otherwise
 	lossParam := strings.TrimSpace(r.FormValue("loss"))
-	numCards  := 4
-	gapW      := 24
+	numCards := 4
+	gapW := 24
 	if lossParam != "" {
 		numCards = 5
-		gapW     = 10 // tighter gap to keep 900px canvas with 5 cards
+		gapW = 10 // tighter gap to keep 900px canvas with 5 cards
 	}
 
-	colW    := (canvasWidth - sidePad*2 - gapW*(numCards-1)) / numCards
-	barY    := canvasHeight - barH
+	colW := (canvasWidth - sidePad*2 - gapW*(numCards-1)) / numCards
+	barY := canvasHeight - barH
 	cardTop := sidePad
-	cardH   := barY - cardTop
+	cardH := barY - cardTop
 
 	// Center content block (88px) in card
 	blockTop := cardTop + (cardH-88)/2
-	valueY   := blockTop + 45
-	labelY   := valueY + 21
-	unitY    := labelY + 19
+	valueY := blockTop + 45
+	labelY := valueY + 21
+	unitY := labelY + 19
 
 	// Determine packet-loss color from value
 	lossColor := colorPing // green: 0%
 	if lossParam != "" {
 		lf, _ := strconv.ParseFloat(lossParam, 64)
-		if lf > 0 && lf < 2 { lossColor = colorLossWarn }
-		if lf >= 2           { lossColor = colorLossBad  }
+		if lf > 0 && lf < 2 {
+			lossColor = colorLossWarn
+		}
+		if lf >= 2 {
+			lossColor = colorLossBad
+		}
 	}
 
 	type metric struct {
@@ -478,10 +512,10 @@ func DrawPNG(w http.ResponseWriter, r *http.Request) {
 		col                color.RGBA
 	}
 	metrics := []metric{
-		{"DOWNLOAD", formatSpeed(record.Download),   "Mbps", colorDownload},
-		{"UPLOAD",   formatSpeed(record.Upload),     "Mbps", colorUpload},
-		{"PING",     formatLatency(record.Ping),     "ms",   colorPing},
-		{"JITTER",   formatLatency(record.Jitter),   "ms",   colorJitter},
+		{"DOWNLOAD", formatSpeed(record.Download), "Mbps", colorDownload},
+		{"UPLOAD", formatSpeed(record.Upload), "Mbps", colorUpload},
+		{"PING", formatLatency(record.Ping), "ms", colorPing},
+		{"JITTER", formatLatency(record.Jitter), "ms", colorJitter},
 	}
 	if lossParam != "" {
 		metrics = append(metrics, metric{"LOSS", formatLoss(lossParam), "%", lossColor})
@@ -495,16 +529,16 @@ func DrawPNG(w http.ResponseWriter, r *http.Request) {
 		fillRoundedRect(canvas, x, cardTop, colW, cardH, radius, colorCard)
 
 		cx := x + colW/2
-		drawText(drawer, m.value, cx, valueY, image.NewUniform(m.col),      valueFace)
-		drawText(drawer, m.label, cx, labelY, image.NewUniform(colorMuted),  labelFace)
-		drawText(drawer, m.unit,  cx, unitY,  image.NewUniform(colorDim),   unitFace)
+		drawText(drawer, m.value, cx, valueY, image.NewUniform(m.col), valueFace)
+		drawText(drawer, m.label, cx, labelY, image.NewUniform(colorMuted), labelFace)
+		drawText(drawer, m.unit, cx, unitY, image.NewUniform(colorDim), unitFace)
 	}
 
 	// thin footer bar
 	fillRect(canvas, 0, barY, canvasWidth, 1, colorBorder)
 	footerY := barY + 19
 
-	isp := extractISP(result.ProcessedString)
+	isp := exportPNGISP(result.ProcessedString, result.RawISPInfo, conf.DisableIPInfo || conf.RedactIP)
 	if isp != "" {
 		drawer.Face = footerFace
 		drawer.Src = image.NewUniform(colorMuted)
@@ -574,4 +608,58 @@ func extractISP(processed string) string {
 		}
 	}
 	return ""
+}
+
+func parseSavedResultForExport(recordISPInfo string, suppress bool) Result {
+	if suppress || strings.TrimSpace(recordISPInfo) == "" {
+		return Result{}
+	}
+	var result Result
+	if err := json.Unmarshal([]byte(recordISPInfo), &result); err != nil {
+		return Result{}
+	}
+	return result
+}
+
+func exportPNGISP(processedString string, raw IPInfoResponse, disableIPInfo bool) string {
+	if disableIPInfo {
+		return ""
+	}
+	if isPrivateProcessedString(processedString) {
+		return ""
+	}
+	if raw.IP != "" && isPrivateExportIP(raw.IP) {
+		return ""
+	}
+	if isp := extractISP(processedString); isp != "" {
+		return isp
+	}
+	if label := rawISPExportLabel(raw); label != "" {
+		return "ISP: " + label
+	}
+	return ""
+}
+
+func redactTelemetryLogs(logs string, redactIP bool) string {
+	if redactIP {
+		return ""
+	}
+	return logs
+}
+
+func redactLocationMetadata(ispInfo string) string {
+	var result Result
+	if err := json.Unmarshal([]byte(ispInfo), &result); err != nil {
+		return "{}"
+	}
+	result.RawISPInfo.Location = ""
+	if result.Location != nil {
+		result.Location.Latitude = nil
+		result.Location.Longitude = nil
+	}
+	redacted, err := json.Marshal(result)
+	if err != nil {
+		return ispInfo
+	}
+	return string(redacted)
 }

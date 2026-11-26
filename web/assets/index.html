@@ -1319,8 +1319,23 @@ window.addEventListener('DOMContentLoaded', () => {
     }
     if (running || done) drawChart();
 
-    if (d.clientIp)
-      document.getElementById('ip-info').innerHTML = `Connected via <strong>${d.clientIp}</strong>`;
+    if (d.clientIp) {
+      const ipInfo = document.getElementById('ip-info');
+      ipInfo.innerHTML = `Connected via <strong>${d.clientIp}</strong>`;
+      if (d.location && typeof d.location === "object") {
+        const locationParts = [
+          d.location.city,
+          d.location.region,
+          d.location.countryName || d.location.country
+        ].filter((value) => typeof value === "string" && value.trim() !== "");
+        if (typeof d.location.postal === "string" && d.location.postal.trim() !== "") {
+          locationParts.push(d.location.postal);
+        }
+        if (locationParts.length > 0) {
+          ipInfo.append(document.createTextNode(` — Approximate IP location: ${locationParts.join(", ")}`));
+        }
+      }
+    }
 
     if (done) {
       document.getElementById('r-dl').textContent     = fmtResult(d.dlStatus);

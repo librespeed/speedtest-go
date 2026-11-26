@@ -1,10 +1,19 @@
 package web
 
 import (
-	"net"
+	"net/netip"
 	"regexp"
 	"strings"
 )
+
+func isLinkLocalIPv6(ip string) bool {
+	addr, err := netip.ParseAddr(strings.TrimPrefix(ip, "::ffff:"))
+	if err != nil {
+		return false
+	}
+	addr = addr.WithZone("")
+	return addr.Is6() && addr.IsLinkLocalUnicast()
+}
 
 // classifyPrivateIP returns a human-readable description if the IP is a
 // private or special-purpose address, or an empty string otherwise.
@@ -16,7 +25,7 @@ func classifyPrivateIP(ip string) string {
 	switch {
 	case ip == "::1":
 		return "localhost IPv6 access"
-	case strings.HasPrefix(ip, "fe80:"):
+	case isLinkLocalIPv6(ip):
 		return "link-local IPv6 access"
 	// ULA IPv6 (fc00::/7): fc00:: - fdff:ffff:...
 	case isULAIPv6(ip):
@@ -39,13 +48,15 @@ func classifyPrivateIP(ip string) string {
 
 // isULAIPv6 checks if an IP is a Unique Local IPv6 Unicast Address (fc00::/7).
 func isULAIPv6(ipStr string) bool {
-	ip := net.ParseIP(ipStr)
-	if ip == nil || ip.To16() == nil {
+	addr, err := netip.ParseAddr(ipStr)
+	if err != nil || !addr.Is6() {
 		return false
 	}
+	addr = addr.WithZone("")
+	bytes := addr.As16()
 	// fc00::/7 means the first 7 bits are 1111110
 	// So the first byte & 0xFE must equal 0xFC
-	return ip[0]&0xFE == 0xFC
+	return bytes[0]&0xFE == 0xFC
 }
 
 // mustCompile is a helper that compiles a regex and panics on error

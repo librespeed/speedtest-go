@@ -4,24 +4,41 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
+	"math"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/oschwald/maxminddb-golang"
 	log "github.com/sirupsen/logrus"
 	"github.com/umahmood/haversine"
+	"golang.org/x/text/language"
+	"golang.org/x/text/language/display"
 
 	"github.com/librespeed/speedtest-go/config"
 	"github.com/librespeed/speedtest-go/results"
 )
 
 var (
-	serverCoord haversine.Coord
+	serverCoord         haversine.Coord
+	serverLocationKnown bool
+
+	ipInfoHTTPClient = &http.Client{Timeout: 5 * time.Second}
+	ipInfoBaseURL    = "https://ipinfo.io"
+	ipInfoLookup     = getIPInfo
+	geoIPLookup      = getGeoIPData
+
+	ipInfoFailureMu            sync.Mutex
+	ipInfoFailureCooldownUntil time.Time
 )
+
+const ipInfoFailureCooldown = 30 * time.Second
 
 func getRandomData(length int) []byte {
 	data := make([]byte, length)
@@ -33,75 +50,132 @@ func getRandomData(length int) []byte {
 
 func getIPInfoURL(address string) string {
 	apiKey := config.LoadedConfig().IPInfoAPIKey
+	return getIPInfoURLWithKey(address, apiKey)
+}
 
-	ipInfoURL := `https://ipinfo.io/%s/json`
+func getIPInfoURLWithKey(address, apiKey string) string {
+	ipInfoURL := strings.TrimRight(ipInfoBaseURL, "/")
 	if address != "" {
-		ipInfoURL = fmt.Sprintf(ipInfoURL, address)
+		ipInfoURL = fmt.Sprintf("%s/%s/json", ipInfoURL, url.PathEscape(address))
 	} else {
-		ipInfoURL = "https://ipinfo.io/json"
+		ipInfoURL += "/json"
 	}
 
 	if apiKey != "" {
-		ipInfoURL += "?token=" + apiKey
+		parsed, err := url.Parse(ipInfoURL)
+		if err == nil {
+			query := parsed.Query()
+			query.Set("token", apiKey)
+			parsed.RawQuery = query.Encode()
+			ipInfoURL = parsed.String()
+		}
 	}
 
 	return ipInfoURL
 }
 
+func ipInfoLookupInCooldown() bool {
+	ipInfoFailureMu.Lock()
+	defer ipInfoFailureMu.Unlock()
+	return time.Now().Before(ipInfoFailureCooldownUntil)
+}
+
+func markIPInfoFailure() {
+	ipInfoFailureMu.Lock()
+	ipInfoFailureCooldownUntil = time.Now().Add(ipInfoFailureCooldown)
+	ipInfoFailureMu.Unlock()
+}
+
+func clearIPInfoFailureCooldown() {
+	ipInfoFailureMu.Lock()
+	ipInfoFailureCooldownUntil = time.Time{}
+	ipInfoFailureMu.Unlock()
+}
+
 func getIPInfo(addr string) results.IPInfoResponse {
 	var ret results.IPInfoResponse
-	resp, err := http.DefaultClient.Get(getIPInfoURL(addr))
-	if err != nil {
-		log.Errorf("Error getting response from ipinfo.io: %s", err)
+	if ipInfoLookupInCooldown() {
 		return ret
 	}
-
-	raw, err := ioutil.ReadAll(resp.Body)
+	resp, err := ipInfoHTTPClient.Get(getIPInfoURL(addr))
 	if err != nil {
-		log.Errorf("Error reading response from ipinfo.io: %s", err)
+		if urlErr, ok := err.(*url.Error); ok {
+			log.Errorf("Error getting response from ipinfo.io: %s", urlErr.Err)
+		} else {
+			log.Errorf("Error getting response from ipinfo.io: %s", err)
+		}
+		markIPInfoFailure()
 		return ret
 	}
 	defer resp.Body.Close()
 
-	if err := json.Unmarshal(raw, &ret); err != nil {
-		log.Errorf("Error parsing response from ipinfo.io: %s", err)
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		log.Warnf("IPinfo returned HTTP status %d", resp.StatusCode)
+		markIPInfoFailure()
+		return ret
 	}
 
+	raw, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if err != nil {
+		log.Errorf("Error reading response from ipinfo.io: %s", err)
+		markIPInfoFailure()
+		return ret
+	}
+
+	if err := json.Unmarshal(raw, &ret); err != nil {
+		log.Errorf("Error parsing response from ipinfo.io: %s", err)
+		markIPInfoFailure()
+		return ret
+	}
+
+	normalizeIPInfoResponse(&ret)
+	if ret.Organization == "" &&
+		ret.Country == "" &&
+		ret.CountryName == "" &&
+		ret.City == "" &&
+		ret.Region == "" &&
+		ret.Postal == "" &&
+		ret.Timezone == "" &&
+		ret.Location == "" {
+		markIPInfoFailure()
+	} else {
+		clearIPInfoFailureCooldown()
+	}
 	return ret
 }
 
 func SetServerLocation(conf *config.Config) {
-	if conf.ServerLat != 0 || conf.ServerLng != 0 {
-		log.Infof("Configured server coordinates: %.6f, %.6f", conf.ServerLat, conf.ServerLng)
-		serverCoord.Lat = conf.ServerLat
-		serverCoord.Lon = conf.ServerLng
+	serverLocationKnown = false
+	serverCoord = haversine.Coord{}
+	if conf.DisableIPInfo {
+		log.Info("IP-derived location metadata is disabled")
+		return
+	}
+	if conf.ServerLocationConfigured || (conf.ServerLat != 0 && conf.ServerLng != 0) {
+		if validCoordinates(conf.ServerLat, conf.ServerLng) {
+			log.Infof("Configured server coordinates: %.6f, %.6f", conf.ServerLat, conf.ServerLng)
+			serverCoord.Lat = conf.ServerLat
+			serverCoord.Lon = conf.ServerLng
+			serverLocationKnown = true
+		} else {
+			log.Errorf("Invalid configured server coordinates: latitude=%v longitude=%v", conf.ServerLat, conf.ServerLng)
+		}
 		return
 	}
 
-	var ret results.IPInfoResponse
-	resp, err := http.DefaultClient.Get(getIPInfoURL(""))
-	if err != nil {
-		log.Errorf("Error getting repsonse from ipinfo.io: %s", err)
-		return
-	}
-	raw, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		log.Errorf("Error reading response from ipinfo.io: %s", err)
-		return
-	}
-	defer resp.Body.Close()
-
-	if err := json.Unmarshal(raw, &ret); err != nil {
-		log.Errorf("Error parsing response from ipinfo.io: %s", err)
+	ret := getIPInfo("")
+	if ret.Location == "" {
 		return
 	}
 
 	if ret.Location != "" {
+		var err error
 		serverCoord, err = parseLocationString(ret.Location)
 		if err != nil {
 			log.Errorf("Cannot get server coordinates: %s", err)
 			return
 		}
+		serverLocationKnown = true
 	}
 
 	log.Infof("Fetched server coordinates: %.6f, %.6f", serverCoord.Lat, serverCoord.Lon)
@@ -110,22 +184,28 @@ func SetServerLocation(conf *config.Config) {
 func parseLocationString(location string) (haversine.Coord, error) {
 	var coord haversine.Coord
 
-	parts := strings.Split(location, ",")
+	parts := strings.Split(strings.TrimSpace(location), ",")
 	if len(parts) != 2 {
 		err := fmt.Errorf("unknown location format: %s", location)
 		log.Error(err)
 		return coord, err
 	}
 
-	lat, err := strconv.ParseFloat(parts[0], 64)
+	lat, err := strconv.ParseFloat(strings.TrimSpace(parts[0]), 64)
 	if err != nil {
 		log.Errorf("Error parsing latitude: %s", parts[0])
 		return coord, err
 	}
 
-	lng, err := strconv.ParseFloat(parts[1], 64)
+	lng, err := strconv.ParseFloat(strings.TrimSpace(parts[1]), 64)
 	if err != nil {
-		log.Errorf("Error parsing longitude: %s", parts[0])
+		log.Errorf("Error parsing longitude: %s", parts[1])
+		return coord, err
+	}
+
+	if !validCoordinates(lat, lng) {
+		err := fmt.Errorf("invalid coordinates: latitude=%v longitude=%v", lat, lng)
+		log.Error(err)
 		return coord, err
 	}
 
@@ -136,6 +216,9 @@ func parseLocationString(location string) (haversine.Coord, error) {
 }
 
 func calculateDistance(clientLocation string, unit string) string {
+	if !serverLocationKnown {
+		return ""
+	}
 	clientCoord, err := parseLocationString(clientLocation)
 	if err != nil {
 		log.Errorf("Error parsing client coordinates: %s", err)
@@ -170,39 +253,264 @@ func roundToNearest10(val float64) float64 {
 	return float64(int64(val/10+0.5)) * 10
 }
 
+func validCoordinates(latitude, longitude float64) bool {
+	return !math.IsNaN(latitude) &&
+		!math.IsInf(latitude, 0) &&
+		!math.IsNaN(longitude) &&
+		!math.IsInf(longitude, 0) &&
+		latitude >= -90 &&
+		latitude <= 90 &&
+		longitude >= -180 &&
+		longitude <= 180
+}
+
+func parseValidatedCoordinates(location string) (float64, float64, bool) {
+	parts := strings.Split(strings.TrimSpace(location), ",")
+	if len(parts) != 2 {
+		return 0, 0, false
+	}
+
+	latitude, err := strconv.ParseFloat(strings.TrimSpace(parts[0]), 64)
+	if err != nil {
+		return 0, 0, false
+	}
+	longitude, err := strconv.ParseFloat(strings.TrimSpace(parts[1]), 64)
+	if err != nil {
+		return 0, 0, false
+	}
+	if !validCoordinates(latitude, longitude) {
+		return 0, 0, false
+	}
+	return latitude, longitude, true
+}
+
+func normalizeCountryCode(code string) string {
+	code = strings.ToUpper(strings.TrimSpace(code))
+	if len(code) != 2 {
+		return ""
+	}
+	for _, char := range code {
+		if char < 'A' || char > 'Z' {
+			return ""
+		}
+	}
+	return code
+}
+
+func countryNameFromCode(code string) string {
+	code = normalizeCountryCode(code)
+	if code == "" {
+		return ""
+	}
+	region, err := language.ParseRegion(code)
+	if err != nil {
+		return ""
+	}
+	name := strings.TrimSpace(display.English.Regions().Name(region))
+	if name == "" || name == code {
+		return ""
+	}
+	return name
+}
+
+func normalizeIPInfoResponse(info *results.IPInfoResponse) {
+	info.IP = strings.TrimSpace(info.IP)
+	info.Hostname = strings.TrimSpace(info.Hostname)
+	info.City = strings.TrimSpace(info.City)
+	info.Region = strings.TrimSpace(info.Region)
+	info.Country = strings.TrimSpace(info.Country)
+	info.CountryName = strings.TrimSpace(info.CountryName)
+	info.Location = strings.TrimSpace(info.Location)
+	info.Organization = strings.TrimSpace(info.Organization)
+	info.ASName = strings.TrimSpace(info.ASName)
+	info.Postal = strings.TrimSpace(info.Postal)
+	info.Timezone = strings.TrimSpace(info.Timezone)
+	info.Readme = strings.TrimSpace(info.Readme)
+
+	if info.Organization == "" {
+		info.Organization = info.ASName
+	}
+
+	countryCode := normalizeCountryCode(info.Country)
+	if countryCode != "" {
+		info.Country = countryCode
+		if countryName := countryNameFromCode(countryCode); countryName != "" {
+			info.CountryName = countryName
+		}
+	} else if info.Country != "" && info.CountryName == "" {
+		info.CountryName = info.Country
+		info.Country = ""
+	}
+}
+
 // GeoIP database holder (lazily opened on first use)
 var (
-	geoIPReader *maxminddb.Reader
-	geoIPOpened bool
+	geoIPReader     *maxminddb.Reader
+	geoIPReaderFile string
+	geoIPInitMu     sync.Mutex
+	geoIPWarningKey string
 )
 
-// getGeoIPData looks up the given IP in the configured GeoIP .mmdb database
-// and returns ISP and country information if available.
-// It returns nil if GeoIP is not configured or the lookup fails.
-func getGeoIPData(ipStr string) *struct {
+type GeoIPData struct {
 	ASName      string
 	CountryName string
-} {
+	City        string
+	Region      string
+	Country     string
+	Postal      string
+	Timezone    string
+	Latitude    *float64
+	Longitude   *float64
+	Location    string
+}
+
+func mapStringValue(value map[string]interface{}, key string) string {
+	if value == nil {
+		return ""
+	}
+	if text, ok := value[key].(string); ok {
+		return strings.TrimSpace(text)
+	}
+	return ""
+}
+
+func mapValue(value interface{}) map[string]interface{} {
+	if value == nil {
+		return nil
+	}
+	if result, ok := value.(map[string]interface{}); ok {
+		return result
+	}
+	return nil
+}
+
+func stringValue(value interface{}) string {
+	if text, ok := value.(string); ok {
+		return strings.TrimSpace(text)
+	}
+	return ""
+}
+
+func floatValue(value interface{}) (float64, bool) {
+	switch number := value.(type) {
+	case float64:
+		return number, true
+	case float32:
+		return float64(number), true
+	case int:
+		return float64(number), true
+	case int32:
+		return float64(number), true
+	case int64:
+		return float64(number), true
+	case uint:
+		return float64(number), true
+	case uint32:
+		return float64(number), true
+	case uint64:
+		return float64(number), true
+	case json.Number:
+		parsed, err := number.Float64()
+		return parsed, err == nil
+	case string:
+		parsed, err := strconv.ParseFloat(strings.TrimSpace(number), 64)
+		return parsed, err == nil
+	default:
+		return 0, false
+	}
+}
+
+func localizedName(value interface{}) string {
+	if text := stringValue(value); text != "" {
+		return text
+	}
+	names := mapValue(value)
+	if names == nil {
+		return ""
+	}
+	if nested := mapValue(names["names"]); nested != nil {
+		names = nested
+	}
+	if name := mapStringValue(names, "en"); name != "" {
+		return name
+	}
+	for _, key := range []string{"default", "name", "code"} {
+		if name := mapStringValue(names, key); name != "" {
+			return name
+		}
+	}
+	return ""
+}
+
+func firstSubdivisionName(value interface{}) string {
+	switch subdivisions := value.(type) {
+	case []interface{}:
+		for _, subdivision := range subdivisions {
+			if name := localizedName(subdivision); name != "" {
+				return name
+			}
+		}
+	case []map[string]interface{}:
+		for _, subdivision := range subdivisions {
+			if name := localizedName(subdivision); name != "" {
+				return name
+			}
+		}
+	}
+	return ""
+}
+
+// getGeoIPData looks up the given IP in a configured country/ASN MMDB or
+// city MMDB and normalizes common ipinfo.io and MaxMind field layouts.
+func getGeoIPData(ipStr string) *GeoIPData {
 	conf := config.LoadedConfig()
-	if conf.GeoIPDatabaseFile == "" {
+	if conf.DisableIPInfo || conf.GeoIPDatabaseFile == "" {
 		return nil
 	}
 
-	if !geoIPOpened {
-		geoIPOpened = true
-		if _, err := os.Stat(conf.GeoIPDatabaseFile); os.IsNotExist(err) {
-			log.Warnf("GeoIP database file not found: %s", conf.GeoIPDatabaseFile)
+	geoIPInitMu.Lock()
+	if geoIPReader != nil && geoIPReaderFile != conf.GeoIPDatabaseFile {
+		_ = geoIPReader.Close()
+		geoIPReader = nil
+		geoIPReaderFile = ""
+		geoIPWarningKey = ""
+	}
+	if geoIPReader == nil {
+		if _, err := os.Stat(conf.GeoIPDatabaseFile); err != nil {
+			if os.IsNotExist(err) {
+				warningKey := "missing:" + conf.GeoIPDatabaseFile
+				if geoIPWarningKey != warningKey {
+					log.Warnf("GeoIP database file not found: %s", conf.GeoIPDatabaseFile)
+					geoIPWarningKey = warningKey
+				}
+			} else {
+				warningKey := "stat:" + conf.GeoIPDatabaseFile + ":" + err.Error()
+				if geoIPWarningKey != warningKey {
+					log.Warnf("Cannot stat GeoIP database file: %s", err)
+					geoIPWarningKey = warningKey
+				}
+			}
+			geoIPInitMu.Unlock()
 			return nil
 		}
 		reader, err := maxminddb.Open(conf.GeoIPDatabaseFile)
 		if err != nil {
-			log.Warnf("Failed to open GeoIP database: %s", err)
+			warningKey := "open:" + conf.GeoIPDatabaseFile + ":" + err.Error()
+			if geoIPWarningKey != warningKey {
+				log.Warnf("Failed to open GeoIP database: %s", err)
+				geoIPWarningKey = warningKey
+			}
+			geoIPInitMu.Unlock()
 			return nil
 		}
 		geoIPReader = reader
+		geoIPReaderFile = conf.GeoIPDatabaseFile
+		geoIPWarningKey = ""
 	}
+	reader := geoIPReader
+	geoIPInitMu.Unlock()
 
-	if geoIPReader == nil {
+	if reader == nil {
 		return nil
 	}
 
@@ -213,7 +521,7 @@ func getGeoIPData(ipStr string) *struct {
 
 	// Try ipinfo.io offline database format first
 	var ipinfoResult map[string]interface{}
-	if err := geoIPReader.Lookup(ip, &ipinfoResult); err != nil {
+	if err := reader.Lookup(ip, &ipinfoResult); err != nil {
 		log.Warnf("GeoIP lookup failed: %s", err)
 		return nil
 	}
@@ -222,68 +530,581 @@ func getGeoIPData(ipStr string) *struct {
 		return nil
 	}
 
-	result := &struct {
-		ASName      string
-		CountryName string
-	}{}
+	return normalizeGeoIPResult(ipinfoResult)
+}
 
-	// ipinfo.io offline format uses "as_name" and "country_name"
-	if v, ok := ipinfoResult["as_name"].(string); ok {
-		result.ASName = v
-	}
-	if v, ok := ipinfoResult["country_name"].(string); ok {
-		result.CountryName = v
-	}
-
-	// If ipinfo format fields are empty, try standard MaxMind GeoIP2 format
-	if result.ASName == "" {
-		// Try autonomous_system > organization
-		if as, ok := ipinfoResult["autonomous_system"].(map[string]interface{}); ok {
-			if v, ok := as["organization"].(string); ok {
-				result.ASName = v
-			}
-		}
-	}
-	if result.CountryName == "" {
-		if country, ok := ipinfoResult["country"].(map[string]interface{}); ok {
-			if v, ok := country["names"].(map[string]interface{}); ok {
-				if n, ok := v["en"].(string); ok {
-					result.CountryName = n
-				}
-			}
-		}
-		// Fallback: direct "country" string field (as used by some GeoIP DBs)
-		if result.CountryName == "" {
-			if v, ok := ipinfoResult["country"].(string); ok {
-				result.CountryName = v
-			}
-		}
-	}
-
-	if result.ASName == "" && result.CountryName == "" {
+func normalizeGeoIPResult(ipinfoResult map[string]interface{}) *GeoIPData {
+	if len(ipinfoResult) == 0 {
 		return nil
 	}
 
+	result := &GeoIPData{}
+
+	// ipinfo.io offline database format.
+	result.ASName = firstNonEmpty(
+		mapStringValue(ipinfoResult, "as_name"),
+		mapStringValue(ipinfoResult, "autonomous_system_organization"),
+		mapStringValue(ipinfoResult, "as_organization"),
+		mapStringValue(ipinfoResult, "organization"),
+		mapStringValue(ipinfoResult, "org"),
+	)
+	result.CountryName = firstNonEmpty(
+		mapStringValue(ipinfoResult, "country_name"),
+		mapStringValue(ipinfoResult, "countryName"),
+	)
+	result.Country = normalizeCountryCode(firstNonEmpty(
+		mapStringValue(ipinfoResult, "country_code"),
+		mapStringValue(ipinfoResult, "countryCode"),
+		mapStringValue(ipinfoResult, "country"),
+	))
+	result.City = firstNonEmpty(
+		mapStringValue(ipinfoResult, "city_name"),
+		mapStringValue(ipinfoResult, "city"),
+		localizedName(ipinfoResult["city"]),
+	)
+	result.Region = firstNonEmpty(
+		mapStringValue(ipinfoResult, "region_name"),
+		mapStringValue(ipinfoResult, "subdivision_name"),
+		mapStringValue(ipinfoResult, "state_name"),
+		mapStringValue(ipinfoResult, "region"),
+		localizedName(ipinfoResult["region"]),
+	)
+	result.Postal = firstNonEmpty(
+		mapStringValue(ipinfoResult, "postal_code"),
+		mapStringValue(ipinfoResult, "postal"),
+	)
+	result.Timezone = firstNonEmpty(
+		mapStringValue(ipinfoResult, "timezone"),
+		mapStringValue(ipinfoResult, "time_zone"),
+	)
+
+	// MaxMind GeoIP2 City/ASN format.
+	if result.ASName == "" {
+		if autonomousSystem := mapValue(ipinfoResult["autonomous_system"]); autonomousSystem != nil {
+			result.ASName = firstNonEmpty(
+				mapStringValue(autonomousSystem, "organization"),
+				mapStringValue(autonomousSystem, "name"),
+			)
+		}
+	}
+	if result.CountryName == "" {
+		if country := mapValue(ipinfoResult["country"]); country != nil {
+			result.CountryName = localizedName(country)
+		}
+	}
+	if result.Country == "" {
+		if country := mapValue(ipinfoResult["country"]); country != nil {
+			result.Country = normalizeCountryCode(firstNonEmpty(
+				mapStringValue(country, "iso_code"),
+				mapStringValue(country, "code"),
+			))
+		}
+	}
+	if result.Country == "" {
+		if country := stringValue(ipinfoResult["country"]); country != "" {
+			result.Country = normalizeCountryCode(country)
+			if result.CountryName == "" && result.Country == "" {
+				result.CountryName = country
+			}
+		}
+	}
+	if result.CountryName == "" && result.Country != "" {
+		result.CountryName = countryNameFromCode(result.Country)
+	}
+
+	if result.City == "" {
+		if city := mapValue(ipinfoResult["city"]); city != nil {
+			result.City = localizedName(city)
+		}
+	}
+	if result.Region == "" {
+		if subdivisions, ok := ipinfoResult["subdivisions"].([]interface{}); ok {
+			result.Region = firstSubdivisionName(subdivisions)
+		} else if subdivisions, ok := ipinfoResult["subdivisions"].([]map[string]interface{}); ok {
+			result.Region = firstSubdivisionName(subdivisions)
+		}
+	}
+	if result.Postal == "" {
+		if postal := mapValue(ipinfoResult["postal"]); postal != nil {
+			result.Postal = firstNonEmpty(
+				mapStringValue(postal, "code"),
+				mapStringValue(postal, "name"),
+			)
+		}
+	}
+	if result.Timezone == "" {
+		if location := mapValue(ipinfoResult["location"]); location != nil {
+			result.Timezone = firstNonEmpty(
+				mapStringValue(location, "time_zone"),
+				mapStringValue(location, "timezone"),
+			)
+		}
+	}
+
+	var latitude, longitude float64
+	var latitudeOK, longitudeOK bool
+	if location := mapValue(ipinfoResult["location"]); location != nil {
+		latitude, latitudeOK = floatValue(location["latitude"])
+		longitude, longitudeOK = floatValue(location["longitude"])
+	}
+	if !latitudeOK {
+		latitude, latitudeOK = floatValue(ipinfoResult["latitude"])
+	}
+	if !longitudeOK {
+		longitude, longitudeOK = floatValue(ipinfoResult["longitude"])
+	}
+	if !latitudeOK {
+		latitude, latitudeOK = floatValue(ipinfoResult["lat"])
+	}
+	if !longitudeOK {
+		longitude, longitudeOK = floatValue(ipinfoResult["lon"])
+	}
+
+	if !latitudeOK || !longitudeOK {
+		if loc := firstNonEmpty(
+			mapStringValue(ipinfoResult, "loc"),
+			stringValue(ipinfoResult["location"]),
+		); loc != "" {
+			if parsedLat, parsedLon, valid := parseValidatedCoordinates(loc); valid {
+				latitude = parsedLat
+				longitude = parsedLon
+				latitudeOK = true
+				longitudeOK = true
+			}
+		}
+	}
+
+	if latitudeOK && longitudeOK && validCoordinates(latitude, longitude) {
+		result.Latitude = float64Pointer(latitude)
+		result.Longitude = float64Pointer(longitude)
+		result.Location = fmt.Sprintf("%.6f,%.6f", latitude, longitude)
+	}
+
+	if result.ASName == "" &&
+		result.CountryName == "" &&
+		result.City == "" &&
+		result.Region == "" &&
+		result.Country == "" &&
+		result.Postal == "" &&
+		result.Timezone == "" &&
+		result.Latitude == nil &&
+		result.Longitude == nil {
+		return nil
+	}
 	return result
 }
 
-// getISPInfoByPriority tries to fetch ISP info using the ipinfo.io API first,
-// then falls back to the configured offline GeoIP database, mirroring PHP behavior.
-func getISPInfoByPriority(addr string) results.IPInfoResponse {
-	// First try: ipinfo.io API
-	info := getIPInfo(addr)
-	if info.Organization != "" || info.Country != "" {
-		return info
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return strings.TrimSpace(value)
+		}
+	}
+	return ""
+}
+
+func float64Pointer(value float64) *float64 {
+	return &value
+}
+
+func locationFromIPInfo(info results.IPInfoResponse) *results.Location {
+	normalizeIPInfoResponse(&info)
+	location := &results.Location{
+		City:        info.City,
+		Region:      info.Region,
+		Country:     normalizeCountryCode(info.Country),
+		CountryName: info.CountryName,
+		Postal:      info.Postal,
+		Timezone:    info.Timezone,
+		Source:      "ipinfo",
+	}
+	if latitude, longitude, valid := parseValidatedCoordinates(info.Location); valid {
+		location.Latitude = float64Pointer(latitude)
+		location.Longitude = float64Pointer(longitude)
+	}
+	if location.Country != "" && location.CountryName == "" {
+		location.CountryName = countryNameFromCode(location.Country)
+	}
+	if location.Country != "" {
+		if countryName := countryNameFromCode(location.Country); countryName != "" {
+			location.CountryName = countryName
+		}
+	}
+	if location.City == "" &&
+		location.Region == "" &&
+		location.Country == "" &&
+		location.CountryName == "" &&
+		location.Postal == "" &&
+		location.Timezone == "" &&
+		location.Latitude == nil &&
+		location.Longitude == nil {
+		return nil
+	}
+	return location
+}
+
+func locationFromGeoIPData(geo *GeoIPData) *results.Location {
+	if geo == nil {
+		return nil
+	}
+	location := &results.Location{
+		City:        strings.TrimSpace(geo.City),
+		Region:      strings.TrimSpace(geo.Region),
+		Country:     normalizeCountryCode(geo.Country),
+		CountryName: strings.TrimSpace(geo.CountryName),
+		Postal:      strings.TrimSpace(geo.Postal),
+		Timezone:    strings.TrimSpace(geo.Timezone),
+		Source:      "geoip",
+	}
+	if geo.Latitude != nil && geo.Longitude != nil &&
+		validCoordinates(*geo.Latitude, *geo.Longitude) {
+		location.Latitude = float64Pointer(*geo.Latitude)
+		location.Longitude = float64Pointer(*geo.Longitude)
+	}
+	if location.Country != "" && location.CountryName == "" {
+		location.CountryName = countryNameFromCode(location.Country)
+	}
+	if location.Country != "" {
+		if countryName := countryNameFromCode(location.Country); countryName != "" {
+			location.CountryName = countryName
+		}
+	}
+	if location.City == "" &&
+		location.Region == "" &&
+		location.Country == "" &&
+		location.CountryName == "" &&
+		location.Postal == "" &&
+		location.Timezone == "" &&
+		location.Latitude == nil &&
+		location.Longitude == nil {
+		return nil
+	}
+	return location
+}
+
+func syncLegacyLocation(info *results.IPInfoResponse, location *results.Location) {
+	if info == nil {
+		return
+	}
+	if location == nil || location.Latitude == nil || location.Longitude == nil {
+		info.Location = ""
+		if location != nil {
+			info.City = strings.TrimSpace(location.City)
+			info.Region = strings.TrimSpace(location.Region)
+			info.Postal = strings.TrimSpace(location.Postal)
+			info.Timezone = strings.TrimSpace(location.Timezone)
+			if strings.TrimSpace(location.CountryName) != "" {
+				info.CountryName = strings.TrimSpace(location.CountryName)
+			}
+			if strings.TrimSpace(location.Country) != "" {
+				info.Country = strings.TrimSpace(location.Country)
+			}
+		}
+		return
+	}
+	info.City = strings.TrimSpace(location.City)
+	info.Region = strings.TrimSpace(location.Region)
+	info.Postal = strings.TrimSpace(location.Postal)
+	info.Timezone = strings.TrimSpace(location.Timezone)
+	country := strings.ToUpper(strings.TrimSpace(location.Country))
+	if country != "" && len(country) == 2 {
+		info.Country = country
+	}
+	if strings.TrimSpace(location.CountryName) != "" {
+		info.CountryName = strings.TrimSpace(location.CountryName)
+	} else if info.Country != "" {
+		info.CountryName = countryNameFromCode(info.Country)
+	}
+	info.Location = fmt.Sprintf("%.6f,%.6f",
+		*location.Latitude,
+		*location.Longitude)
+}
+
+func countryIdentity(code, name string) string {
+	code = normalizeCountryCode(code)
+	if code != "" {
+		if countryName := countryNameFromCode(code); countryName != "" {
+			return strings.ToLower(strings.TrimSpace(countryName))
+		}
+	}
+	return strings.ToLower(strings.TrimSpace(name))
+}
+
+func locationCountryConflict(primary, fallback *results.Location) bool {
+	if primary == nil || fallback == nil {
+		return false
+	}
+	primaryCode := normalizeCountryCode(primary.Country)
+	fallbackCode := normalizeCountryCode(fallback.Country)
+	if primaryCode != "" && fallbackCode != "" && primaryCode != fallbackCode {
+		return true
+	}
+	primaryIdentity := countryIdentity(primary.Country, primary.CountryName)
+	fallbackIdentity := countryIdentity(fallback.Country, fallback.CountryName)
+	return primaryIdentity != "" &&
+		fallbackIdentity != "" &&
+		primaryIdentity != fallbackIdentity
+}
+
+func locationPlaceConflict(primary, fallback *results.Location) bool {
+	if primary == nil || fallback == nil {
+		return false
+	}
+	cityConflict := primary.City != "" &&
+		fallback.City != "" &&
+		!strings.EqualFold(strings.TrimSpace(primary.City), strings.TrimSpace(fallback.City))
+	regionConflict := primary.Region != "" &&
+		fallback.Region != "" &&
+		!strings.EqualFold(strings.TrimSpace(primary.Region), strings.TrimSpace(fallback.Region))
+	if cityConflict || regionConflict {
+		return true
+	}
+	primaryHasCoordinates := primary.Latitude != nil && primary.Longitude != nil
+	if primaryHasCoordinates &&
+		strings.TrimSpace(primary.City) == "" &&
+		strings.TrimSpace(primary.Region) == "" &&
+		(strings.TrimSpace(fallback.City) != "" ||
+			strings.TrimSpace(fallback.Region) != "" ||
+			strings.TrimSpace(fallback.Postal) != "" ||
+			strings.TrimSpace(fallback.Timezone) != "") {
+		return true
+	}
+	return false
+}
+
+func mergeLocations(primary, fallback *results.Location) *results.Location {
+	if primary == nil {
+		return fallback
+	}
+	if fallback == nil {
+		return primary
+	}
+	if locationCountryConflict(primary, fallback) ||
+		locationPlaceConflict(primary, fallback) {
+		return primary
+	}
+	contributed := false
+	cityConflict := primary.City != "" &&
+		fallback.City != "" &&
+		!strings.EqualFold(strings.TrimSpace(primary.City), strings.TrimSpace(fallback.City))
+	regionConflict := primary.Region != "" &&
+		fallback.Region != "" &&
+		!strings.EqualFold(strings.TrimSpace(primary.Region), strings.TrimSpace(fallback.Region))
+	coordinatesConflict := cityConflict || regionConflict
+	primaryHasCoordinates := primary.Latitude != nil && primary.Longitude != nil
+	if primary.City == "" {
+		if fallback.City != "" && !primaryHasCoordinates {
+			primary.City = fallback.City
+			if fallback.Region != "" {
+				primary.Region = fallback.Region
+			}
+			if primary.Latitude == nil {
+				primary.Latitude = fallback.Latitude
+			}
+			if primary.Longitude == nil {
+				primary.Longitude = fallback.Longitude
+			}
+			contributed = true
+		}
+	} else if !cityConflict {
+		if primary.Region == "" && fallback.Region != "" && !primaryHasCoordinates {
+			primary.Region = fallback.Region
+			contributed = true
+		}
+	}
+	if primary.Region == "" && fallback.Region != "" && !coordinatesConflict && !primaryHasCoordinates {
+		primary.Region = fallback.Region
+		contributed = true
+	}
+	if primary.Country == "" {
+		if fallback.Country != "" {
+			primary.Country = fallback.Country
+			contributed = true
+		}
+	}
+	if primary.CountryName == "" {
+		if fallback.CountryName != "" {
+			primary.CountryName = fallback.CountryName
+			contributed = true
+		}
+	}
+	if primary.Postal == "" {
+		if fallback.Postal != "" {
+			primary.Postal = fallback.Postal
+			contributed = true
+		}
+	}
+	if primary.Timezone == "" {
+		if fallback.Timezone != "" {
+			primary.Timezone = fallback.Timezone
+			contributed = true
+		}
+	}
+	if primary.Latitude == nil {
+		if fallback.Latitude != nil && !coordinatesConflict {
+			primary.Latitude = fallback.Latitude
+			contributed = true
+		}
+	}
+	if primary.Longitude == nil {
+		if fallback.Longitude != nil && !coordinatesConflict {
+			primary.Longitude = fallback.Longitude
+			contributed = true
+		}
+	}
+	if primary.Country != "" {
+		if countryName := countryNameFromCode(primary.Country); countryName != "" {
+			primary.CountryName = countryName
+		}
+	}
+	if contributed {
+		primary.Source = "ipinfo+geoip"
+	}
+	return primary
+}
+
+func geographicFieldsConflict(info *results.IPInfoResponse, geo *GeoIPData) bool {
+	if geo == nil {
+		return false
+	}
+	apiCountry := normalizeCountryCode(info.Country)
+	geoCountry := normalizeCountryCode(geo.Country)
+	if apiCountry != "" && geoCountry != "" && apiCountry != geoCountry {
+		return true
+	}
+	apiCountryIdentity := countryIdentity(apiCountry, info.CountryName)
+	geoCountryIdentity := countryIdentity(geoCountry, geo.CountryName)
+	if apiCountryIdentity != "" &&
+		geoCountryIdentity != "" &&
+		apiCountryIdentity != geoCountryIdentity {
+		return true
+	}
+	apiCity := strings.TrimSpace(info.City)
+	geoCity := strings.TrimSpace(geo.City)
+	if apiCity != "" && geoCity != "" && !strings.EqualFold(apiCity, geoCity) {
+		return true
+	}
+	apiRegion := strings.TrimSpace(info.Region)
+	geoRegion := strings.TrimSpace(geo.Region)
+	if apiRegion != "" && geoRegion != "" && !strings.EqualFold(apiRegion, geoRegion) {
+		return true
+	}
+	geoHasCoordinates := geo.Latitude != nil && geo.Longitude != nil
+	if geo.Location != "" {
+		if _, _, valid := parseValidatedCoordinates(geo.Location); valid {
+			geoHasCoordinates = true
+		}
+	}
+	if geoHasCoordinates &&
+		geoCity == "" &&
+		geoRegion == "" &&
+		(apiCity != "" ||
+			apiRegion != "" ||
+			strings.TrimSpace(info.Postal) != "" ||
+			strings.TrimSpace(info.Timezone) != "") {
+		return true
+	}
+	return false
+}
+
+func geoIPNeedsProviderFallback(geo *GeoIPData) bool {
+	if geo == nil {
+		return true
+	}
+	return geo.ASName == "" ||
+		geo.Country == "" ||
+		geo.City == "" ||
+		geo.Region == "" ||
+		geo.Postal == "" ||
+		geo.Timezone == "" ||
+		geo.Location == ""
+}
+
+func getIPInfoAndLocationByPriority(addr string) (results.IPInfoResponse, *results.Location) {
+	conf := config.LoadedConfig()
+	if conf.DisableIPInfo {
+		info := results.IPInfoResponse{IP: strings.TrimSpace(addr)}
+		return info, nil
 	}
 
-	// Second try: offline GeoIP database
-	geo := getGeoIPData(addr)
+	geo := geoIPLookup(addr)
+	geoLocation := locationFromGeoIPData(geo)
+
+	info := results.IPInfoResponse{IP: strings.TrimSpace(addr)}
 	if geo != nil {
 		info.Organization = geo.ASName
-		info.Country = geo.CountryName
-		return info
+		info.ASName = geo.ASName
+		info.Country = geo.Country
+		info.CountryName = geo.CountryName
+		info.City = geo.City
+		info.Region = geo.Region
+		info.Postal = geo.Postal
+		info.Timezone = geo.Timezone
+		info.Location = geo.Location
 	}
 
-	// Fallback: empty result (will show IP only)
-	return info
+	api := results.IPInfoResponse{}
+	var apiLocation *results.Location
+	if geoIPNeedsProviderFallback(geo) {
+		api = ipInfoLookup(addr)
+		normalizeIPInfoResponse(&api)
+		apiLocation = locationFromIPInfo(api)
+	}
+
+	if geo == nil {
+		info = api
+		if info.IP == "" {
+			info.IP = strings.TrimSpace(addr)
+		}
+		normalizeIPInfoResponse(&info)
+	} else {
+		// The local MMDB record is primary. IPinfo is only used to fill
+		// missing fields or organization; conflicting geography is skipped.
+		if info.Organization == "" {
+			info.Organization = api.Organization
+		}
+		if info.ASName == "" {
+			info.ASName = api.ASName
+		}
+		if !geographicFieldsConflict(&api, geo) {
+			if info.Country == "" {
+				info.Country = api.Country
+			}
+			if info.CountryName == "" {
+				info.CountryName = api.CountryName
+			}
+			if info.City == "" {
+				info.City = api.City
+			}
+			if info.Region == "" {
+				info.Region = api.Region
+			}
+			if info.Postal == "" {
+				info.Postal = api.Postal
+			}
+			if info.Timezone == "" {
+				info.Timezone = api.Timezone
+			}
+			if info.Location == "" && api.Location != "" {
+				if _, _, valid := parseValidatedCoordinates(api.Location); valid {
+					info.Location = api.Location
+				}
+			}
+		}
+		normalizeIPInfoResponse(&info)
+		if countryCode := normalizeCountryCode(info.Country); countryCode != "" {
+			if countryName := countryNameFromCode(countryCode); countryName != "" {
+				info.CountryName = countryName
+			}
+		}
+	}
+
+	location := geoLocation
+	if location == nil {
+		location = apiLocation
+	} else if apiLocation != nil && !geographicFieldsConflict(&api, geo) {
+		location = mergeLocations(location, apiLocation)
+	}
+	syncLegacyLocation(&info, location)
+	return info, location
 }

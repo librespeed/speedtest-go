@@ -1,8 +1,28 @@
 package results
 
 import (
+	"encoding/json"
 	"testing"
+
+	"github.com/librespeed/speedtest-go/database/schema"
 )
+
+func TestRedactLocationMetadata(t *testing.T) {
+	input := `{"processedString":"128.94.2.134 - Example ISP, US","rawIspInfo":{"ip":"128.94.2.134","loc":"36.6676,-78.3875"},"location":{"city":"Boydton","latitude":36.6676,"longitude":-78.3875,"loc":"36.6676,-78.3875","location":"36.6676,-78.3875"}}`
+
+	redacted := redactLocationMetadata(input)
+	var result Result
+	if err := json.Unmarshal([]byte(redacted), &result); err != nil {
+		t.Fatalf("decode redacted payload: %v", err)
+	}
+	if result.RawISPInfo.Location != "" {
+		t.Fatalf("rawIspInfo loc should be omitted when IP redaction is enabled: %q", result.RawISPInfo.Location)
+	}
+	if result.Location != nil &&
+		(result.Location.Latitude != nil || result.Location.Longitude != nil) {
+		t.Fatalf("location coordinates should be omitted when IP redaction is enabled: %#v", result.Location)
+	}
+}
 
 func TestIPRedaction(t *testing.T) {
 	tests := []struct {
@@ -75,11 +95,11 @@ func TestIPRedaction(t *testing.T) {
 
 func TestIPRedactionChain(t *testing.T) {
 	tests := []struct {
-		name      string
-		ispInfo   string
-		logs      string
-		wantISP   string
-		wantLogs  string
+		name     string
+		ispInfo  string
+		logs     string
+		wantISP  string
+		wantLogs string
 	}{
 		{
 			name:     "IPv4 client: addresses and hostname redacted",
@@ -117,5 +137,230 @@ func TestIPRedactionChain(t *testing.T) {
 				t.Errorf("logs\ngot:  %s\nwant: %s", logs, tt.wantLogs)
 			}
 		})
+	}
+}
+
+func TestLegacyISPPayloadCompatibility(t *testing.T) {
+	tests := []struct {
+		name    string
+		payload string
+	}{
+		{
+			name:    "legacy object",
+			payload: `{"processedString":"128.94.2.134 - Microsoft Corporation, US","rawIspInfo":{"ip":"128.94.2.134","city":"Boydton","region":"Virginia","country":"US","loc":"36.6676,-78.3875","org":"AS8075 Microsoft Corporation"}}`,
+		},
+		{
+			name:    "empty string raw payload",
+			payload: `{"processedString":"128.94.2.134","rawIspInfo":"","location":null}`,
+		},
+		{
+			name:    "null raw payload",
+			payload: `{"processedString":"128.94.2.134","rawIspInfo":null}`,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			var result Result
+			err := json.Unmarshal([]byte(test.payload), &result)
+			if err != nil {
+				t.Fatalf("legacy payload should remain decodable: %v", err)
+			}
+			if result.ProcessedString == "" {
+				t.Fatal("processedString was lost")
+			}
+		})
+	}
+
+	location := &Location{
+		City:        "Boydton",
+		Region:      "Virginia",
+		Country:     "US",
+		CountryName: "United States",
+		Postal:      "23917",
+		Timezone:    "America/New_York",
+		Source:      "ipinfo",
+	}
+	latitude := 36.6676
+	longitude := -78.3875
+	location.Latitude = &latitude
+	location.Longitude = &longitude
+
+	payload, err := json.Marshal(Result{
+		ProcessedString: "128.94.2.134 - Microsoft Corporation, US",
+		RawISPInfo: IPInfoResponse{
+			IP:           "128.94.2.134",
+			City:         "Boydton",
+			Region:       "Virginia",
+			Country:      "US",
+			Location:     "36.6676,-78.3875",
+			Organization: "AS8075 Microsoft Corporation",
+			Postal:       "23917",
+			Timezone:     "America/New_York",
+		},
+		Location: location,
+	})
+	if err != nil {
+		t.Fatalf("marshal structured payload: %v", err)
+	}
+
+	var decoded map[string]json.RawMessage
+	if err := json.Unmarshal(payload, &decoded); err != nil {
+		t.Fatalf("decode payload map: %v", err)
+	}
+	if _, ok := decoded["processedString"]; !ok {
+		t.Fatal("processedString missing from structured payload")
+	}
+	if _, ok := decoded["rawIspInfo"]; !ok {
+		t.Fatal("rawIspInfo missing from structured payload")
+	}
+	if _, ok := decoded["location"]; !ok {
+		t.Fatal("location missing from structured payload")
+	}
+
+	var locationObject map[string]json.RawMessage
+	if err := json.Unmarshal(decoded["location"], &locationObject); err != nil {
+		t.Fatalf("decode location object: %v", err)
+	}
+	for _, allowed := range []string{
+		"city", "region", "country", "countryName", "postal", "timezone",
+		"latitude", "longitude", "source",
+	} {
+		delete(locationObject, allowed)
+	}
+	if len(locationObject) != 0 {
+		t.Fatalf("location object contains unexpected fields: %#v", locationObject)
+	}
+
+	legacyOnlyPayload, err := json.Marshal(Result{
+		ProcessedString: "128.94.2.134",
+		RawISPInfo:      IPInfoResponse{},
+	})
+	if err != nil {
+		t.Fatalf("marshal legacy-only payload: %v", err)
+	}
+	var legacyOnly map[string]json.RawMessage
+	if err := json.Unmarshal(legacyOnlyPayload, &legacyOnly); err != nil {
+		t.Fatalf("decode legacy-only payload: %v", err)
+	}
+	if _, ok := legacyOnly["location"]; ok {
+		t.Fatal("nil location should be omitted")
+	}
+}
+
+func TestSavedResultExportsHonorDisableIPInfo(t *testing.T) {
+	processed := "128.94.2.134 - Microsoft Corporation, United States (15 mi)"
+	raw := IPInfoResponse{
+		Organization: "AS8075 Microsoft Corporation",
+		CountryName:  "United States",
+	}
+
+	if got := exportJSONISPName(processed, raw, true); got != "" {
+		t.Fatalf("JSON export leaked ISP metadata while disabled: %q", got)
+	}
+	if got := exportPNGISP(processed, raw, true); got != "" {
+		t.Fatalf("PNG export leaked ISP metadata while disabled: %q", got)
+	}
+
+	if got := exportJSONISPName(processed, raw, false); got == "" {
+		t.Fatal("JSON export lost ISP metadata when IP info is enabled")
+	}
+	if got := exportPNGISP(processed, raw, false); got == "" {
+		t.Fatal("PNG export lost ISP metadata when IP info is enabled")
+	}
+
+	if got := exportJSONISPName("", raw, false); got != "Microsoft Corporation, United States" {
+		t.Fatalf("JSON export should fall back to raw ISP data: %q", got)
+	}
+	if got := exportPNGISP("", raw, false); got != "ISP: Microsoft Corporation, United States" {
+		t.Fatalf("PNG export should fall back to raw ISP data: %q", got)
+	}
+	if got := exportJSONISPName("10.0.0.25 - private IPv4 access", IPInfoResponse{}, false); got != "" {
+		t.Fatalf("private-IP JSON export should not look like an ISP: %q", got)
+	}
+	if got := exportPNGISP("10.0.0.25 - private IPv4 access", IPInfoResponse{}, false); got != "" {
+		t.Fatalf("private-IP PNG export should not look like an ISP: %q", got)
+	}
+	privateRaw := IPInfoResponse{
+		IP:           "10.0.0.25",
+		Organization: "Example Org",
+		Country:      "US",
+	}
+	if got := exportJSONISPName("", privateRaw, false); got != "" {
+		t.Fatalf("raw-only private-IP JSON export should not look like an ISP: %q", got)
+	}
+	if got := exportPNGISP("", privateRaw, false); got != "" {
+		t.Fatalf("raw-only private-IP PNG export should not look like an ISP: %q", got)
+	}
+	for _, mappedPrivate := range []string{"::ffff:10.0.0.25", "::ffff:100.64.0.1", "::ffff:127.0.0.1", "::"} {
+		raw := IPInfoResponse{
+			IP:           mappedPrivate,
+			Organization: "Example Org",
+			Country:      "US",
+		}
+		if got := exportJSONISPName("", raw, false); got != "" {
+			t.Fatalf("mapped-private JSON export should be suppressed for %q: %q", mappedPrivate, got)
+		}
+		if got := exportPNGISP("", raw, false); got != "" {
+			t.Fatalf("mapped-private PNG export should be suppressed for %q: %q", mappedPrivate, got)
+		}
+	}
+}
+
+func TestRedactLocationMetadataClearsCoordinates(t *testing.T) {
+	input := `{"processedString":"128.94.2.134 - Microsoft Corporation, US","rawIspInfo":{"ip":"128.94.2.134","city":"Boydton","region":"Virginia","country":"US","loc":"36.6676,-78.3875","org":"AS8075 Microsoft Corporation"},"location":{"city":"Boydton","region":"Virginia","country":"US","countryName":"United States","latitude":36.6676,"longitude":-78.3875,"source":"ipinfo"}}`
+
+	redacted := redactLocationMetadata(input)
+	var result Result
+	if err := json.Unmarshal([]byte(redacted), &result); err != nil {
+		t.Fatalf("decode redacted telemetry: %v", err)
+	}
+	if result.RawISPInfo.Location != "" {
+		t.Fatalf("legacy loc should be cleared: %q", result.RawISPInfo.Location)
+	}
+	if result.Location == nil {
+		t.Fatal("location object should remain for non-coordinate fields")
+	}
+	if result.Location.Latitude != nil || result.Location.Longitude != nil {
+		t.Fatalf("coordinates should be cleared: %#v", result.Location)
+	}
+	if result.Location.City != "Boydton" || result.Location.Country != "US" {
+		t.Fatalf("non-coordinate location fields should remain: %#v", result.Location)
+	}
+}
+
+func TestRedactionClearsLogsAndMalformedLocationPayload(t *testing.T) {
+	if got := redactTelemetryLogs("debug 128.94.2.134 36.6676,-78.3875", true); got != "" {
+		t.Fatalf("redacted telemetry logs should be empty: %q", got)
+	}
+	if got := redactTelemetryLogs("debug log", false); got != "debug log" {
+		t.Fatalf("non-redacted telemetry logs changed: %q", got)
+	}
+	if got := redactLocationMetadata(`{"location":{"latitude":36.6676,"longitude":-78.3875`); got != "{}" {
+		t.Fatalf("malformed ISP payload should be removed under redaction: %q", got)
+	}
+}
+
+func TestSanitizeStatsRecordHonorsRedaction(t *testing.T) {
+	record := schema.TelemetryData{
+		IPAddress: "203.0.113.42",
+		ISPInfo:   `{"location":{"latitude":36.6676,"longitude":-78.3875}}`,
+		Log:       "debug 203.0.113.42",
+	}
+	sanitizeStatsRecord(&record, false, true)
+	if record.IPAddress != "0.0.0.0" {
+		t.Fatalf("stats IP should be redacted: %q", record.IPAddress)
+	}
+	if record.ISPInfo != "" || record.Log != "" {
+		t.Fatalf("stats ISP/log should be removed under redaction: isp=%q log=%q", record.ISPInfo, record.Log)
+	}
+}
+
+func TestParseSavedResultForExportToleratesEmptyAndMalformed(t *testing.T) {
+	for _, payload := range []string{"", "{malformed"} {
+		result := parseSavedResultForExport(payload, false)
+		if result.ProcessedString != "" || result.RawISPInfo.Organization != "" {
+			t.Fatalf("empty/malformed payload should produce no ISP: %#v", result)
+		}
 	}
 }
