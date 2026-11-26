@@ -151,7 +151,7 @@ You need Go 1.21+ to compile the binary.
     server_lng=0
     # ipinfo.io API key, if applicable
     ipinfo_api_key=""
-    # disable IP lookup and approximate IP-derived location metadata
+    # disable ISP and approximate-location lookups and metadata
     disable_ipinfo=false
 
     # assets directory path, defaults to `assets` in the same directory

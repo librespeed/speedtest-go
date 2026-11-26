@@ -246,3 +246,25 @@ func TestSavedResultExportsHonorDisableIPInfo(t *testing.T) {
 		t.Fatal("PNG export lost ISP metadata when IP info is enabled")
 	}
 }
+
+func TestRedactLocationMetadataClearsCoordinates(t *testing.T) {
+	input := `{"processedString":"128.94.2.134 - Microsoft Corporation, US","rawIspInfo":{"ip":"128.94.2.134","city":"Boydton","region":"Virginia","country":"US","loc":"36.6676,-78.3875","org":"AS8075 Microsoft Corporation"},"location":{"city":"Boydton","region":"Virginia","country":"US","countryName":"United States","latitude":36.6676,"longitude":-78.3875,"source":"ipinfo"}}`
+
+	redacted := redactLocationMetadata(input)
+	var result Result
+	if err := json.Unmarshal([]byte(redacted), &result); err != nil {
+		t.Fatalf("decode redacted telemetry: %v", err)
+	}
+	if result.RawISPInfo.Location != "" {
+		t.Fatalf("legacy loc should be cleared: %q", result.RawISPInfo.Location)
+	}
+	if result.Location == nil {
+		t.Fatal("location object should remain for non-coordinate fields")
+	}
+	if result.Location.Latitude != nil || result.Location.Longitude != nil {
+		t.Fatalf("coordinates should be cleared: %#v", result.Location)
+	}
+	if result.Location.City != "Boydton" || result.Location.Country != "US" {
+		t.Fatalf("non-coordinate location fields should remain: %#v", result.Location)
+	}
+}

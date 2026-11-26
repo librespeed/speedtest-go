@@ -98,10 +98,10 @@ func JSONResult(w http.ResponseWriter, r *http.Request) {
 
 	// Extract ISP name from ISP info JSON
 	var result Result
-	if !conf.DisableIPInfo {
-		if err := json.Unmarshal([]byte(record.ISPInfo), &result); err == nil {
-			resp.ISPInfo = exportJSONISPName(result.ProcessedString, false)
-		}
+	if conf.DisableIPInfo {
+		resp.ISPInfo = exportJSONISPName("", true)
+	} else if err := json.Unmarshal([]byte(record.ISPInfo), &result); err == nil {
+		resp.ISPInfo = exportJSONISPName(result.ProcessedString, conf.DisableIPInfo)
 	}
 
 	w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0, s-maxage=0")

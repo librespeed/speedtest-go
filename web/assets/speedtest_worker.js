@@ -107,7 +107,7 @@ this.addEventListener("message", function(e) {
 				ulStatus: ulStatus,
 				pingStatus: pingStatus,
 				clientIp: clientIp,
-				location: location,
+				location: approximateLocation,
 				jitterStatus: jitterStatus,
 				dlProgress: dlProgress,
 				ulProgress: ulProgress,
@@ -287,7 +287,7 @@ this.addEventListener("message", function(e) {
 		pingStatus = "";
 		jitterStatus = "";
         clientIp = "";
-        location = "";
+        approximateLocation = "";
 		dlProgress = 0;
 		ulProgress = 0;
 		pingProgress = 0;
@@ -321,7 +321,7 @@ function clearRequests() {
 // gets client's IP using url_getIp, then calls the done function
 let ipCalled = false; // used to prevent multiple accidental calls to getIp
 let ispInfo = ""; //used for telemetry
-let location = ""; // approximate IP-derived location
+let approximateLocation = ""; // approximate IP-derived location
 function getIp(done) {
 	tverb("getIp");
 	if (ipCalled) return;
@@ -334,11 +334,11 @@ function getIp(done) {
 			const data = JSON.parse(xhr.responseText);
 			clientIp = data.processedString;
 			ispInfo = data.rawIspInfo;
-			location = typeof data.location === "object" && data.location !== null ? data.location : "";
+			approximateLocation = typeof data.location === "object" && data.location !== null ? data.location : "";
 		} catch (e) {
 			clientIp = xhr.responseText;
 			ispInfo = "";
-			location = "";
+			approximateLocation = "";
 		}
 		done();
 	};
@@ -819,7 +819,7 @@ function sendTelemetry(done) {
 	const telemetryIspInfo = {
 		processedString: clientIp,
 		rawIspInfo: typeof ispInfo === "object" ? ispInfo : "",
-		location: typeof location === "object" && location !== null ? location : undefined
+		location: typeof approximateLocation === "object" && approximateLocation !== null ? approximateLocation : undefined
 	};
 	try {
 		const fd = new FormData();

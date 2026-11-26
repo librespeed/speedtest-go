@@ -1,13 +1,18 @@
 package web
 
 import (
+	"bytes"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/librespeed/speedtest-go/config"
 	"github.com/librespeed/speedtest-go/results"
+	log "github.com/sirupsen/logrus"
 )
 
 func TestIPInfoURLSupportsUnauthenticatedAndAPIKeyRequests(t *testing.T) {
@@ -32,6 +37,48 @@ func TestIPInfoURLSupportsUnauthenticatedAndAPIKeyRequests(t *testing.T) {
 	}
 	if parsed.Query().Get("token") != "test-token" {
 		t.Fatalf("API-key token missing from URL: %s", withKey)
+	}
+}
+
+func TestGetIPInfoTransportErrorDoesNotLeakAPIKey(t *testing.T) {
+	config.Load("../settings.toml")
+	conf := config.LoadedConfig()
+	oldKey := conf.IPInfoAPIKey
+	conf.IPInfoAPIKey = "SECRETTOKEN"
+
+	oldBaseURL := ipInfoBaseURL
+	oldClient := ipInfoHTTPClient
+	oldOutput := log.StandardLogger().Out
+	var logOutput bytes.Buffer
+
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("open closed-port probe: %v", err)
+	}
+	address := listener.Addr().String()
+	if err := listener.Close(); err != nil {
+		t.Fatalf("close closed-port probe: %v", err)
+	}
+
+	ipInfoBaseURL = "http://" + address
+	ipInfoHTTPClient = &http.Client{Timeout: 250 * time.Millisecond}
+	log.SetOutput(&logOutput)
+	t.Cleanup(func() {
+		conf.IPInfoAPIKey = oldKey
+		ipInfoBaseURL = oldBaseURL
+		ipInfoHTTPClient = oldClient
+		log.SetOutput(oldOutput)
+		config.Load("../settings.toml")
+	})
+
+	_ = getIPInfo("1.2.3.4")
+
+	logText := logOutput.String()
+	if strings.Contains(logText, "SECRETTOKEN") {
+		t.Fatalf("transport log leaked API key: %q", logText)
+	}
+	if logText == "" {
+		t.Fatal("expected transport error log")
 	}
 }
 
@@ -401,5 +448,90 @@ func TestCalculateDistanceWithUnknownServerLocation(t *testing.T) {
 
 	if distance := calculateDistance("36.6676,-78.3875", "km"); distance != "" {
 		t.Fatalf("unknown server location should suppress distance: %q", distance)
+	}
+}
+
+func TestCountryNameOnlyAPIRecordIsReconciled(t *testing.T) {
+	config.Load("../settings.toml")
+
+	oldIPLookup := ipInfoLookup
+	oldGeoLookup := geoIPLookup
+	ipInfoLookup = func(string) results.IPInfoResponse {
+		return results.IPInfoResponse{
+			IP:          "128.94.2.134",
+			CountryName: "Canada",
+		}
+	}
+	geoIPLookup = func(string) *GeoIPData {
+		latitude := 43.6532
+		longitude := -79.3832
+		return &GeoIPData{
+			CountryName: "United States",
+			Country:     "US",
+			City:        "Toronto",
+			Region:      "Ontario",
+			Latitude:    &latitude,
+			Longitude:   &longitude,
+			Location:    "43.653200,-79.383200",
+		}
+	}
+	t.Cleanup(func() {
+		ipInfoLookup = oldIPLookup
+		geoIPLookup = oldGeoLookup
+		config.Load("../settings.toml")
+	})
+
+	info, location := getIPInfoAndLocationByPriority("128.94.2.134")
+	if info.Country != "US" || info.CountryName != "United States" {
+		t.Fatalf("final country code and name should be reconciled: %#v", info)
+	}
+	if location == nil || location.Country != "US" || location.CountryName != "United States" {
+		t.Fatalf("location country fields should be reconciled: %#v", location)
+	}
+}
+
+func TestMetroMismatchDropsFallbackCoordinates(t *testing.T) {
+	config.Load("../settings.toml")
+
+	oldIPLookup := ipInfoLookup
+	oldGeoLookup := geoIPLookup
+	ipInfoLookup = func(string) results.IPInfoResponse {
+		return results.IPInfoResponse{
+			IP:       "128.94.2.134",
+			City:     "Washington",
+			Region:   "District of Columbia",
+			Country:  "US",
+			Location: "38.9072,-77.0369",
+		}
+	}
+	geoIPLookup = func(string) *GeoIPData {
+		latitude := 43.6532
+		longitude := -79.3832
+		return &GeoIPData{
+			CountryName: "United States",
+			City:        "Toronto",
+			Region:      "Ontario",
+			Country:     "US",
+			Latitude:    &latitude,
+			Longitude:   &longitude,
+			Location:    "43.653200,-79.383200",
+		}
+	}
+	t.Cleanup(func() {
+		ipInfoLookup = oldIPLookup
+		geoIPLookup = oldGeoLookup
+		config.Load("../settings.toml")
+	})
+
+	info, location := getIPInfoAndLocationByPriority("128.94.2.134")
+	if info.Location != "38.9072,-77.0369" {
+		t.Fatalf("offline loc should not replace conflicting API metro loc: %q", info.Location)
+	}
+	if location == nil || location.City != "Washington" {
+		t.Fatalf("API metro should remain authoritative: %#v", location)
+	}
+	if location.Latitude == nil || *location.Latitude != 38.9072 ||
+		location.Longitude == nil || *location.Longitude != -77.0369 {
+		t.Fatalf("conflicting metro coordinates should be retained from API only: %#v", location)
 	}
 }

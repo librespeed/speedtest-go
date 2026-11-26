@@ -73,7 +73,11 @@ func getIPInfo(addr string) results.IPInfoResponse {
 	var ret results.IPInfoResponse
 	resp, err := ipInfoHTTPClient.Get(getIPInfoURL(addr))
 	if err != nil {
-		log.Errorf("Error getting response from ipinfo.io: %s", err)
+		if urlErr, ok := err.(*url.Error); ok {
+			log.Errorf("Error getting response from ipinfo.io: %s", urlErr.Err)
+		} else {
+			log.Errorf("Error getting response from ipinfo.io: %s", err)
+		}
 		return ret
 	}
 	defer resp.Body.Close()
@@ -301,6 +305,7 @@ var (
 	geoIPReader     *maxminddb.Reader
 	geoIPReaderFile string
 	geoIPInitMu     sync.Mutex
+	geoIPWarningKey string
 )
 
 type GeoIPData struct {
@@ -425,25 +430,39 @@ func getGeoIPData(ipStr string) *GeoIPData {
 		_ = geoIPReader.Close()
 		geoIPReader = nil
 		geoIPReaderFile = ""
+		geoIPWarningKey = ""
 	}
 	if geoIPReader == nil {
 		if _, err := os.Stat(conf.GeoIPDatabaseFile); err != nil {
 			if os.IsNotExist(err) {
-				log.Warnf("GeoIP database file not found: %s", conf.GeoIPDatabaseFile)
+				warningKey := "missing:" + conf.GeoIPDatabaseFile
+				if geoIPWarningKey != warningKey {
+					log.Warnf("GeoIP database file not found: %s", conf.GeoIPDatabaseFile)
+					geoIPWarningKey = warningKey
+				}
 			} else {
-				log.Warnf("Cannot stat GeoIP database file: %s", err)
+				warningKey := "stat:" + conf.GeoIPDatabaseFile + ":" + err.Error()
+				if geoIPWarningKey != warningKey {
+					log.Warnf("Cannot stat GeoIP database file: %s", err)
+					geoIPWarningKey = warningKey
+				}
 			}
 			geoIPInitMu.Unlock()
 			return nil
 		}
 		reader, err := maxminddb.Open(conf.GeoIPDatabaseFile)
 		if err != nil {
-			log.Warnf("Failed to open GeoIP database: %s", err)
+			warningKey := "open:" + conf.GeoIPDatabaseFile + ":" + err.Error()
+			if geoIPWarningKey != warningKey {
+				log.Warnf("Failed to open GeoIP database: %s", err)
+				geoIPWarningKey = warningKey
+			}
 			geoIPInitMu.Unlock()
 			return nil
 		}
 		geoIPReader = reader
 		geoIPReaderFile = conf.GeoIPDatabaseFile
+		geoIPWarningKey = ""
 	}
 	reader := geoIPReader
 	geoIPInitMu.Unlock()
@@ -645,13 +664,6 @@ func float64Pointer(value float64) *float64 {
 	return &value
 }
 
-// getISPInfoByPriority tries to fetch ISP info using the ipinfo.io API first,
-// then falls back to the configured offline GeoIP database, mirroring PHP behavior.
-func getISPInfoByPriority(addr string) results.IPInfoResponse {
-	info, _ := getIPInfoAndLocationByPriority(addr)
-	return info
-}
-
 func locationFromIPInfo(info results.IPInfoResponse) *results.Location {
 	normalizeIPInfoResponse(&info)
 	location := &results.Location{
@@ -669,9 +681,6 @@ func locationFromIPInfo(info results.IPInfoResponse) *results.Location {
 	}
 	if location.Country != "" && location.CountryName == "" {
 		location.CountryName = countryNameFromCode(location.Country)
-	}
-	if location.Country == "" && location.CountryName != "" {
-		// A non-ISO countryName is still useful, but country remains omitted.
 	}
 	if location.City == "" &&
 		location.Region == "" &&
@@ -728,6 +737,13 @@ func mergeLocations(primary, fallback *results.Location) *results.Location {
 		return primary
 	}
 	contributed := false
+	cityConflict := primary.City != "" &&
+		fallback.City != "" &&
+		!strings.EqualFold(strings.TrimSpace(primary.City), strings.TrimSpace(fallback.City))
+	regionConflict := primary.Region != "" &&
+		fallback.Region != "" &&
+		!strings.EqualFold(strings.TrimSpace(primary.Region), strings.TrimSpace(fallback.Region))
+	coordinatesConflict := cityConflict || regionConflict
 	if primary.City == "" {
 		if fallback.City != "" {
 			primary.City = fallback.City
@@ -765,15 +781,20 @@ func mergeLocations(primary, fallback *results.Location) *results.Location {
 		}
 	}
 	if primary.Latitude == nil {
-		if fallback.Latitude != nil {
+		if fallback.Latitude != nil && !coordinatesConflict {
 			primary.Latitude = fallback.Latitude
 			contributed = true
 		}
 	}
 	if primary.Longitude == nil {
-		if fallback.Longitude != nil {
+		if fallback.Longitude != nil && !coordinatesConflict {
 			primary.Longitude = fallback.Longitude
 			contributed = true
+		}
+	}
+	if primary.Country != "" {
+		if countryName := countryNameFromCode(primary.Country); countryName != "" {
+			primary.CountryName = countryName
 		}
 	}
 	if contributed {
@@ -786,6 +807,8 @@ func mergeGeoIPData(info *results.IPInfoResponse, geo *GeoIPData) {
 	if geo == nil {
 		return
 	}
+	// ISP/ASN is independent of the geographic record; it remains useful even
+	// when a country or city conflict makes the offline geography inconsistent.
 	if info.Organization == "" {
 		info.Organization = geo.ASName
 	}
@@ -798,11 +821,13 @@ func mergeGeoIPData(info *results.IPInfoResponse, geo *GeoIPData) {
 		}
 	}
 
-	apiCountry := normalizeCountryCode(info.Country)
-	geoCountry := normalizeCountryCode(geo.Country)
-	countryConflict := apiCountry != "" && geoCountry != "" && apiCountry != geoCountry
-	if countryConflict {
+	if geographicFieldsConflict(info, geo) {
 		normalizeIPInfoResponse(info)
+		if countryCode := normalizeCountryCode(info.Country); countryCode != "" {
+			if countryName := countryNameFromCode(countryCode); countryName != "" {
+				info.CountryName = countryName
+			}
+		}
 		return
 	}
 	if info.Country == "" {
@@ -827,15 +852,33 @@ func mergeGeoIPData(info *results.IPInfoResponse, geo *GeoIPData) {
 		info.Location = geo.Location
 	}
 	normalizeIPInfoResponse(info)
+	if countryCode := normalizeCountryCode(info.Country); countryCode != "" {
+		if countryName := countryNameFromCode(countryCode); countryName != "" {
+			info.CountryName = countryName
+		}
+	}
 }
 
-func countryCodesConflict(info results.IPInfoResponse, geo *GeoIPData) bool {
+func geographicFieldsConflict(info *results.IPInfoResponse, geo *GeoIPData) bool {
 	if geo == nil {
 		return false
 	}
 	apiCountry := normalizeCountryCode(info.Country)
 	geoCountry := normalizeCountryCode(geo.Country)
-	return apiCountry != "" && geoCountry != "" && apiCountry != geoCountry
+	if apiCountry != "" && geoCountry != "" && apiCountry != geoCountry {
+		return true
+	}
+	apiCity := strings.TrimSpace(info.City)
+	geoCity := strings.TrimSpace(geo.City)
+	if apiCity != "" && geoCity != "" && !strings.EqualFold(apiCity, geoCity) {
+		return true
+	}
+	apiRegion := strings.TrimSpace(info.Region)
+	geoRegion := strings.TrimSpace(geo.Region)
+	if apiRegion != "" && geoRegion != "" && !strings.EqualFold(apiRegion, geoRegion) {
+		return true
+	}
+	return false
 }
 
 func getIPInfoAndLocationByPriority(addr string) (results.IPInfoResponse, *results.Location) {
@@ -851,7 +894,7 @@ func getIPInfoAndLocationByPriority(addr string) (results.IPInfoResponse, *resul
 
 	geo := geoIPLookup(addr)
 	geoLocation := locationFromGeoIPData(geo)
-	if countryCodesConflict(info, geo) {
+	if geographicFieldsConflict(&info, geo) {
 		geoLocation = nil
 	}
 	mergeGeoIPData(&info, geo)
