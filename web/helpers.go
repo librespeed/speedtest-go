@@ -677,7 +677,7 @@ func normalizeGeoIPResult(ipinfoResult map[string]interface{}) *GeoIPData {
 	if latitudeOK && longitudeOK && validCoordinates(latitude, longitude) {
 		result.Latitude = float64Pointer(latitude)
 		result.Longitude = float64Pointer(longitude)
-		result.Location = fmt.Sprintf("%.3f,%.3f", latitude, longitude)
+		result.Location = fmt.Sprintf("%.6f,%.6f", latitude, longitude)
 	}
 
 	if result.ASName == "" &&
@@ -811,7 +811,7 @@ func syncLegacyLocation(info *results.IPInfoResponse, location *results.Location
 	} else if info.Country != "" {
 		info.CountryName = countryNameFromCode(info.Country)
 	}
-	info.Location = fmt.Sprintf("%.3f,%.3f",
+	info.Location = fmt.Sprintf("%.6f,%.6f",
 		*location.Latitude,
 		*location.Longitude)
 }
