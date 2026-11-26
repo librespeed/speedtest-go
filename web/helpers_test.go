@@ -2,6 +2,7 @@ package web
 
 import (
 	"bytes"
+	"errors"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -14,6 +15,12 @@ import (
 	"github.com/librespeed/speedtest-go/results"
 	log "github.com/sirupsen/logrus"
 )
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (function roundTripFunc) RoundTrip(request *http.Request) (*http.Response, error) {
+	return function(request)
+}
 
 func TestIPInfoURLSupportsUnauthenticatedAndAPIKeyRequests(t *testing.T) {
 	oldBaseURL := ipInfoBaseURL
@@ -79,6 +86,39 @@ func TestGetIPInfoTransportErrorDoesNotLeakAPIKey(t *testing.T) {
 	}
 	if logText == "" {
 		t.Fatal("expected transport error log")
+	}
+}
+
+func TestGetIPInfoFailureCooldown(t *testing.T) {
+	config.Load("../settings.toml")
+
+	oldClient := ipInfoHTTPClient
+	oldBaseURL := ipInfoBaseURL
+	calls := 0
+	ipInfoBaseURL = "https://127.0.0.1"
+	ipInfoHTTPClient = &http.Client{
+		Timeout: 250 * time.Millisecond,
+		Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+			calls++
+			return nil, errors.New("provider unavailable")
+		}),
+	}
+	ipInfoFailureMu.Lock()
+	ipInfoFailureCooldownUntil = time.Time{}
+	ipInfoFailureMu.Unlock()
+	t.Cleanup(func() {
+		ipInfoHTTPClient = oldClient
+		ipInfoBaseURL = oldBaseURL
+		ipInfoFailureMu.Lock()
+		ipInfoFailureCooldownUntil = time.Time{}
+		ipInfoFailureMu.Unlock()
+		config.Load("../settings.toml")
+	})
+
+	_ = getIPInfo("1.2.3.4")
+	_ = getIPInfo("1.2.3.4")
+	if calls != 1 {
+		t.Fatalf("provider should be cooled down after first failure, calls=%d", calls)
 	}
 }
 
@@ -292,7 +332,7 @@ func TestMalformedCoordinatesAreRejected(t *testing.T) {
 	}
 }
 
-func TestCountryConflictSkipsGeoIPGeography(t *testing.T) {
+func TestCountryConflictKeepsGeoIPPrimary(t *testing.T) {
 	config.Load("../settings.toml")
 
 	oldIPLookup := ipInfoLookup
@@ -332,28 +372,28 @@ func TestCountryConflictSkipsGeoIPGeography(t *testing.T) {
 	if info.Organization != "Example ISP" {
 		t.Fatalf("organization fallback should survive country conflict: %q", info.Organization)
 	}
-	if info.Country != "US" {
-		t.Fatalf("API country should remain authoritative: %q", info.Country)
+	if info.Country != "CA" {
+		t.Fatalf("GeoIP country should remain primary: %q", info.Country)
 	}
-	if info.City != "Washington" || info.Region != "District of Columbia" {
-		t.Fatalf("conflicting GeoIP city/region should be skipped: %#v", info)
+	if info.City != "Toronto" || info.Region != "Ontario" {
+		t.Fatalf("GeoIP city/region should remain primary: %#v", info)
 	}
-	if info.Location != "38.9072,-77.0369" {
-		t.Fatalf("conflicting GeoIP coordinates should be skipped: %q", info.Location)
+	if info.Location != "43.653200,-79.383200" {
+		t.Fatalf("GeoIP coordinates should remain primary: %q", info.Location)
 	}
-	if location == nil || location.Source != "ipinfo" {
-		t.Fatalf("conflicting fallback should not add mixed provenance: %#v", location)
+	if location == nil || location.Source != "geoip" {
+		t.Fatalf("conflicting API should not replace GeoIP provenance: %#v", location)
 	}
-	if location.City != "Washington" || location.Country != "US" {
+	if location.City != "Toronto" || location.Country != "CA" {
 		t.Fatalf("unexpected conflict location: %#v", location)
 	}
-	if location.Latitude == nil || *location.Latitude != 38.9072 ||
-		location.Longitude == nil || *location.Longitude != -77.0369 {
-		t.Fatalf("API coordinates should remain: %#v", location)
+	if location.Latitude == nil || *location.Latitude != 43.6532 ||
+		location.Longitude == nil || *location.Longitude != -79.3832 {
+		t.Fatalf("GeoIP coordinates should remain: %#v", location)
 	}
 }
 
-func TestIPInfoGeoIPMergeReportsMixedSource(t *testing.T) {
+func TestGeoIPPrimaryKeepsGeoIPSource(t *testing.T) {
 	config.Load("../settings.toml")
 
 	oldIPLookup := ipInfoLookup
@@ -389,8 +429,8 @@ func TestIPInfoGeoIPMergeReportsMixedSource(t *testing.T) {
 	if info.Location != "36.667600,-78.387500" {
 		t.Fatalf("valid GeoIP legacy loc should fill missing API loc: %q", info.Location)
 	}
-	if location == nil || location.Source != "ipinfo+geoip" {
-		t.Fatalf("mixed source should be reported: %#v", location)
+	if location == nil || location.Source != "geoip" {
+		t.Fatalf("complete MMDB metadata should keep GeoIP source: %#v", location)
 	}
 	if location.City != "Boydton" || location.Region != "Virginia" {
 		t.Fatalf("GeoIP fields should enrich API metadata: %#v", location)
@@ -490,7 +530,7 @@ func TestCountryNameOnlyAPIRecordIsReconciled(t *testing.T) {
 	}
 }
 
-func TestMetroMismatchDropsFallbackCoordinates(t *testing.T) {
+func TestMetroMismatchKeepsGeoIPPrimary(t *testing.T) {
 	config.Load("../settings.toml")
 
 	oldIPLookup := ipInfoLookup
@@ -524,14 +564,14 @@ func TestMetroMismatchDropsFallbackCoordinates(t *testing.T) {
 	})
 
 	info, location := getIPInfoAndLocationByPriority("128.94.2.134")
-	if info.Location != "38.9072,-77.0369" {
-		t.Fatalf("offline loc should not replace conflicting API metro loc: %q", info.Location)
+	if info.Location != "43.653200,-79.383200" {
+		t.Fatalf("GeoIP loc should remain primary for a metro conflict: %q", info.Location)
 	}
-	if location == nil || location.City != "Washington" {
-		t.Fatalf("API metro should remain authoritative: %#v", location)
+	if location == nil || location.City != "Toronto" {
+		t.Fatalf("GeoIP metro should remain authoritative: %#v", location)
 	}
-	if location.Latitude == nil || *location.Latitude != 38.9072 ||
-		location.Longitude == nil || *location.Longitude != -77.0369 {
-		t.Fatalf("conflicting metro coordinates should be retained from API only: %#v", location)
+	if location.Latitude == nil || *location.Latitude != 43.6532 ||
+		location.Longitude == nil || *location.Longitude != -79.3832 {
+		t.Fatalf("GeoIP metro coordinates should remain: %#v", location)
 	}
 }

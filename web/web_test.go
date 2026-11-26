@@ -218,6 +218,44 @@ func TestGetIPMalformedLocationHasNoEmptyDistanceSuffix(t *testing.T) {
 	}
 }
 
+func TestGetIPPrivateIPBypassesProviderLookups(t *testing.T) {
+	config.Load("../settings.toml")
+
+	oldIPLookup := ipInfoLookup
+	oldGeoLookup := geoIPLookup
+	apiCalled := false
+	geoCalled := false
+	ipInfoLookup = func(string) results.IPInfoResponse {
+		apiCalled = true
+		return results.IPInfoResponse{}
+	}
+	geoIPLookup = func(string) *GeoIPData {
+		geoCalled = true
+		return nil
+	}
+	t.Cleanup(func() {
+		ipInfoLookup = oldIPLookup
+		geoIPLookup = oldGeoLookup
+		config.Load("../settings.toml")
+	})
+
+	request := httptest.NewRequest(http.MethodGet, "/getIP?isp=true", nil)
+	request.RemoteAddr = "10.0.0.25:12345"
+	recorder := httptest.NewRecorder()
+	getIP(recorder, request)
+
+	if apiCalled || geoCalled {
+		t.Fatalf("private IP should bypass providers: api=%v geo=%v", apiCalled, geoCalled)
+	}
+	var response results.Result
+	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
+		t.Fatalf("decode private-IP response: %v", err)
+	}
+	if response.ProcessedString != "10.0.0.25 - private IPv4 access" {
+		t.Fatalf("unexpected private-IP processedString: %q", response.ProcessedString)
+	}
+}
+
 func TestGetIPDisableIPInfoSkipsLookup(t *testing.T) {
 	config.Load("../settings.toml")
 
