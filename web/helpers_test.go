@@ -664,6 +664,31 @@ func TestMergeLocationsAdoptsFallbackWithoutPrimaryGeography(t *testing.T) {
 	}
 }
 
+func TestSyncLegacyLocationUsesFinalMergedPlace(t *testing.T) {
+	lat := 38.9072
+	lon := -77.0369
+	info := results.IPInfoResponse{
+		Country:  "US",
+		City:     "Old City",
+		Region:   "Old Region",
+		Location: "43.6532,-79.3832",
+	}
+	location := &results.Location{
+		City:        "Washington",
+		Region:      "District of Columbia",
+		Country:     "US",
+		CountryName: "United States",
+		Latitude:    &lat,
+		Longitude:   &lon,
+	}
+	syncLegacyLocation(&info, location)
+	if info.City != "Washington" || info.Region != "District of Columbia" ||
+		info.Country != "US" || info.CountryName != "United States" ||
+		info.Location != "38.907,-77.037" {
+		t.Fatalf("legacy fields should sync to final location: %#v", info)
+	}
+}
+
 func TestNormalizeIPInfoCountryNameReconcilesCountryCode(t *testing.T) {
 	info := results.IPInfoResponse{
 		Country:     "US",
