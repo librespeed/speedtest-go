@@ -43,7 +43,7 @@ func TestGetIPResponseIncludesLegacyAndStructuredLocation(t *testing.T) {
 	request.RemoteAddr = "128.94.2.134:12345"
 	recorder := httptest.NewRecorder()
 
-	getIP(recorder, request)
+	getIP(config.LoadedConfig())(recorder, request)
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("unexpected status: %d", recorder.Code)
 	}
@@ -115,7 +115,7 @@ func TestGetIPProcessedStringFallsBackToCountryName(t *testing.T) {
 	request := httptest.NewRequest(http.MethodGet, "/getIP?isp=true", nil)
 	request.RemoteAddr = "128.94.2.134:12345"
 	recorder := httptest.NewRecorder()
-	getIP(recorder, request)
+	getIP(config.LoadedConfig())(recorder, request)
 
 	var response results.Result
 	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
@@ -158,7 +158,7 @@ func TestGetIPUnknownServerLocationHasNoDistanceSuffix(t *testing.T) {
 	request := httptest.NewRequest(http.MethodGet, "/getIP?isp=true&distance=km", nil)
 	request.RemoteAddr = "128.94.2.134:12345"
 	recorder := httptest.NewRecorder()
-	getIP(recorder, request)
+	getIP(config.LoadedConfig())(recorder, request)
 
 	var response results.Result
 	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
@@ -199,7 +199,7 @@ func TestGetIPMalformedLocationHasNoEmptyDistanceSuffix(t *testing.T) {
 	request := httptest.NewRequest(http.MethodGet, "/getIP?isp=true&distance=km", nil)
 	request.RemoteAddr = "128.94.2.134:12345"
 	recorder := httptest.NewRecorder()
-	getIP(recorder, request)
+	getIP(config.LoadedConfig())(recorder, request)
 
 	var response results.Result
 	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
@@ -255,7 +255,7 @@ func TestGetIPPrivateIPBypassesProviderLookups(t *testing.T) {
 	request := httptest.NewRequest(http.MethodGet, "/getIP?isp=true", nil)
 	request.RemoteAddr = "10.0.0.25:12345"
 	recorder := httptest.NewRecorder()
-	getIP(recorder, request)
+	getIP(config.LoadedConfig())(recorder, request)
 
 	if apiCalled || geoCalled {
 		t.Fatalf("private IP should bypass providers: api=%v geo=%v", apiCalled, geoCalled)
@@ -296,7 +296,7 @@ func TestGetIPDisableIPInfoSkipsLookup(t *testing.T) {
 	request := httptest.NewRequest(http.MethodGet, "/getIP?isp=true", nil)
 	request.RemoteAddr = "128.94.2.134:12345"
 	recorder := httptest.NewRecorder()
-	getIP(recorder, request)
+	getIP(config.LoadedConfig())(recorder, request)
 
 	if called {
 		t.Fatal("IP lookup was called while disable_ipinfo was enabled")

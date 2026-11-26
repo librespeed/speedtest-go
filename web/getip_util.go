@@ -1,10 +1,19 @@
 package web
 
 import (
-	"net"
+	"net/netip"
 	"regexp"
 	"strings"
 )
+
+func isLinkLocalIPv6(ip string) bool {
+	addr, err := netip.ParseAddr(strings.TrimPrefix(ip, "::ffff:"))
+	if err != nil {
+		return false
+	}
+	addr = addr.WithZone("")
+	return addr.Is6() && addr.IsLinkLocalUnicast()
+}
 
 // classifyPrivateIP returns a human-readable description if the IP is a
 // private or special-purpose address, or an empty string otherwise.

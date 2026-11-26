@@ -323,7 +323,11 @@ func getIP(conf *config.Config) http.HandlerFunc {
 			}
 
 			if ispInfo.Location != "" {
-				isp += " (" + calculateDistance(ispInfo.Location, distanceUnit) + ")"
+				if _, _, valid := parseValidatedCoordinates(ispInfo.Location); valid {
+					if distance := calculateDistance(ispInfo.Location, distanceUnit); distance != "" {
+						isp += " (" + distance + ")"
+					}
+				}
 			}
 
 			ret.ProcessedString += " - " + isp
